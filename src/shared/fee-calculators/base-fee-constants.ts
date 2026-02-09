@@ -135,7 +135,15 @@ export const FEE_CONSTANTS = {
   SBT_BURN_FEE: 0.0001,                    // 0.01 cents per byte - SBT burn transactions
   REQUIRED_VERSION_FEE: 0.0001,            // 0.01 cents per byte - Required version transactions
   ALLOWANCE_FEE: 0.0001,                   // 0.01 cents per byte - Allowance transactions
-  UNKNOWN_TXN_FEE: 0.0001                 // 0.01 cents per byte - Unknown transaction types (fallback)
+  UNKNOWN_TXN_FEE: 0.0001,                // 0.01 cents per byte - Unknown transaction types (fallback)
+
+  // ===== NEW TOKEN BALANCE FEE =====
+  // Fee charged per recipient address that doesn't currently hold the transferred token.
+  // This covers the network cost of creating a new token balance entry for that recipient.
+  // Note: The SDK checks balances at transaction build time. In rare edge cases (recipient had balance,
+  // sent it out, then receives again), the SDK may add this fee when the network doesn't need it.
+  // The network won't take the extra fee, but the authorized amount will be slightly higher.
+  NEW_TOKEN_BALANCE_FEE: 0.20              // $0.20 USD per recipient without existing token balance
 } as const;
 
 /**
@@ -181,6 +189,17 @@ const TRANSACTION_TYPE_FEE_MAP: Record<number, number> = {
  */
 export function getPerByteFeeConstant(transactionType: number): number {
   return TRANSACTION_TYPE_FEE_MAP[transactionType] ?? FEE_CONSTANTS.UNKNOWN_TXN_FEE;
+}
+
+/**
+ * Get the new token balance fee in USD
+ * 
+ * This fee is charged per address that doesn't currently hold the transferred token.
+ * 
+ * @returns The new token balance fee in USD
+ */
+export function getNewTokenBalanceFee(): number {
+  return FEE_CONSTANTS.NEW_TOKEN_BALANCE_FEE;
 }
 
 /**

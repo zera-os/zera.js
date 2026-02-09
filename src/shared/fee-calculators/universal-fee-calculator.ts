@@ -30,6 +30,9 @@ import {
   CONTRACT_FEE_TYPE,
   ContractFees
 } from '../../../proto/generated/txn_pb.js';
+import bs58 from 'bs58';
+
+import { getBalance } from '../../api/validator/balance/service.js';
 import { getTokenFeeInfo } from '../../api/handler/token-info/service.js';
 import type { 
   AmountInput,
@@ -57,6 +60,7 @@ import {
   updateFeeConstants,
   getSignatureSize,
   getPerByteFeeConstant,
+  getNewTokenBalanceFee,
   getKeyFee,
   getHashFee
 } from './base-fee-constants.js';
@@ -157,6 +161,26 @@ export interface FeeConfig {
   gasFeeInUsd?: number;
   /** Optional gRPC configuration for network calls */
   grpcConfig?: GRPCConfig;
+  /**
+   * Override for the new token balance fee check (CoinTXN only).
+   * 
+   * By default (undefined), the SDK calls getBalance() to check if the sender/recipients
+   * hold the transferred token and adds $0.20 per address that doesn't.
+   * 
+   * - `true`  — Always add the $0.20 fee per address (skip the API call). Useful when you
+   *             know the destination doesn't hold the token yet, or to avoid an extra network round-trip.
+   * - `false` — Never add the fee (skip the API call). Useful when you know all addresses
+   *             already hold the token.
+   * - `undefined` (default) — Auto-detect via getBalance() API call.
+   * 
+   * @example
+   * // Skip balance check, always add initialization fee
+   * feeConfig: { needsInitialization: true }
+   * 
+   * // Skip balance check, never add initialization fee  
+   * feeConfig: { needsInitialization: false }
+   */
+  needsInitialization?: boolean;
 }
 
 /**
@@ -848,6 +872,141 @@ function calculateNetworkFee(
 }
 
 /**
+ * Calculate additional network fee for addresses that don't hold the transferred token.
+ * 
+ * For CoinTXN (token transfers), the network charges an additional fee when a recipient
+ * address doesn't currently have that token. This function checks all destination
+ * addresses, adding $0.20 worth of the base fee token per recipient without a balance.
+ * 
+ * @note The sender is NOT checked — only output (recipient) addresses are relevant.
+ * 
+ * @param protoObject - The CoinTXN protobuf object (must have outputTransfers)
+ * @param baseFeeId - The base fee instrument ID (e.g., '$ZRA+0000')
+ * @param contractId - The contract ID of the token being transferred
+ * @param tokenInfoMap - Map of token info including exchange rates
+ * @param grpcConfig - gRPC configuration for balance lookups
+ * @param needsInitialization - Optional override: true = always add fee, false = never add fee, undefined = auto-detect
+ */
+async function calculateNewTokenBalanceFee(
+  protoObject: TransactionMessage,
+  baseFeeId: string,
+  contractId: string,
+  tokenInfoMap: Map<string, TokenInfo>,
+  grpcConfig?: GRPCConfig,
+  needsInitialization?: boolean
+): Promise<void> {
+  if (!isCoinTXN(protoObject)) return;
+
+  const coinTxn = protoObject as CoinTXN;
+  const addressesToCheck: string[] = [];
+
+  // 1. Extract destination addresses from outputTransfers (stored as base58-decoded Uint8Array)
+  if (coinTxn.outputTransfers && coinTxn.outputTransfers.length > 0) {
+    for (const output of coinTxn.outputTransfers) {
+      if (output.walletAddress && output.walletAddress.length > 0) {
+        try {
+          const addressString = bs58.encode(output.walletAddress);
+          if (addressString && !addressesToCheck.includes(addressString)) {
+            addressesToCheck.push(addressString);
+          }
+        } catch {
+          // Skip addresses that can't be decoded — shouldn't happen with valid transactions
+        }
+      }
+    }
+  }
+
+  if (addressesToCheck.length === 0) return;
+
+  // 3. Determine how many addresses don't hold the token
+  let addressesWithoutBalance = 0;
+
+  if (needsInitialization === true) {
+    // Override: user says all addresses need initialization — skip API calls entirely
+    addressesWithoutBalance = addressesToCheck.length;
+    logger.info('needsInitialization=true override: treating all addresses as needing initialization', {
+      addressCount: addressesToCheck.length,
+      operation: 'calculateNewTokenBalanceFee'
+    });
+  } else if (needsInitialization === false) {
+    // Override: user says no addresses need initialization — skip API calls entirely
+    logger.info('needsInitialization=false override: skipping new token balance fee', {
+      operation: 'calculateNewTokenBalanceFee'
+    });
+    return;
+  } else {
+    // Default: check balance for each address via API
+    for (const address of addressesToCheck) {
+      try {
+        const balanceResponse = await getBalance(address, contractId, grpcConfig || {});
+        // The validator returns balance: '0' when the wallet doesn't have that token
+        if (balanceResponse.balance === '0') {
+          addressesWithoutBalance++;
+        }
+      } catch {
+        // If we can't check balance, assume the address doesn't have it (safer to overestimate)
+        addressesWithoutBalance++;
+        logger.warn('Failed to check balance for new token fee estimation, assuming address does not hold token', {
+          address,
+          contractId,
+          operation: 'calculateNewTokenBalanceFee'
+        });
+      }
+    }
+  }
+
+  if (addressesWithoutBalance === 0) return;
+
+  // 4. Calculate $0.20 per address in the base fee token's smallest units
+  const feePerAddressUsd = getNewTokenBalanceFee(); // $0.20
+  const totalFeeUsd = new Decimal(feePerAddressUsd).mul(addressesWithoutBalance);
+
+  // Convert USD to base fee token smallest units using exchange rate
+  const tokenInfo = tokenInfoMap.get(baseFeeId);
+  if (!tokenInfo?.rate) {
+    logger.warn('Cannot calculate new token balance fee: missing exchange rate for base fee token', {
+      baseFeeId,
+      operation: 'calculateNewTokenBalanceFee'
+    });
+    return;
+  }
+
+  const exchangeRate = toDecimal(tokenInfo.rate);
+  // Scale to 1e18 precision to match the rate format
+  const totalFeeScaled = totalFeeUsd.mul(1e18);
+  const feeInTokenUnits = totalFeeScaled.div(exchangeRate);
+
+  // Get denomination decimals
+  let decimals: number;
+  if (tokenInfo.denomination) {
+    decimals = getDecimalPlacesFromDenomination(tokenInfo.denomination);
+  } else {
+    throw new Error(`Token info missing denomination for ${baseFeeId}`);
+  }
+
+  // Convert to smallest units
+  const precisionMultiplier = new Decimal(10).pow(decimals);
+  const feeInSmallestUnits = feeInTokenUnits.mul(precisionMultiplier).floor();
+
+  // 5. Add the fee to the existing base fee
+  const txnProto = protoObject as { base?: { feeAmount?: string; feeId?: string } };
+  if (txnProto.base?.feeAmount) {
+    const currentFee = toDecimal(txnProto.base.feeAmount);
+    const newFee = currentFee.add(feeInSmallestUnits);
+    txnProto.base.feeAmount = newFee.floor().toString();
+
+    logger.info('Added new token balance fee to base fee', {
+      addressesChecked: addressesToCheck.length,
+      addressesWithoutBalance,
+      feePerAddressUsd: feePerAddressUsd.toString(),
+      totalAdditionalFeeSmallestUnits: feeInSmallestUnits.toString(),
+      newTotalBaseFee: txnProto.base.feeAmount,
+      operation: 'calculateNewTokenBalanceFee'
+    });
+  }
+}
+
+/**
  * Universal Fee Calculator class
  */
 export class UniversalFeeCalculator {
@@ -930,6 +1089,33 @@ export class UniversalFeeCalculator {
       options.overestimatePercent,
       options.gasFeeInUsd
     );
+
+    // STEP 4: Add new token balance fee for CoinTXN (only for auto-calculated base fees)
+    // Checks if sender or any destination address doesn't hold the transferred token,
+    // and adds $0.20 per such address to the base network fee.
+    if (transactionType === TRANSACTION_TYPE.COIN_TYPE && options.baseFee === undefined) {
+      const coinContractId = isCoinTXN(options.protoObject) ? options.protoObject.contractId : undefined;
+      if (coinContractId) {
+        try {
+          await calculateNewTokenBalanceFee(
+            options.protoObject,
+            effectiveBaseFeeId,
+            coinContractId,
+            workingTokenInfoMap,
+            options.grpcConfig,
+            options.needsInitialization
+          );
+        } catch (error) {
+          // Non-fatal: if balance check fails, proceed without the additional fee.
+          // The network will reject the transaction if fees are insufficient,
+          // but we don't want to block transaction creation due to balance lookup failures.
+          logger.warn('New token balance fee check failed, proceeding without additional fee', {
+            error: error instanceof Error ? error.message : String(error),
+            operation: 'calculateFee'
+          });
+        }
+      }
+    }
 
     return options.protoObject;
   }
