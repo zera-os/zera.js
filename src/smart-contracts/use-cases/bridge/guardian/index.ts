@@ -1,0 +1,107 @@
+/**
+ * Guardian Module
+ * 
+ * Proto types, service definition, and VAA helpers for the ZERA Guardian service.
+ * Used to fetch VAA (Verified Action Approval) payloads and submit bridge transactions.
+ * 
+ * ## Fetching VAA Payloads
+ * 
+ * @example
+ * ```typescript
+ * import { createClient } from '@zera-os/zera.js';
+ * import { guardian } from '@zera-os/zera.js';
+ * 
+ * const client = createClient(guardian.GuardianService, { 
+ *   host: 'guardian.zerascan.io' 
+ * });
+ * 
+ * // Get a VAA payload
+ * const response = await client.getPayload(new guardian.PayloadRequest({
+ *   payloadId: 'txn_hash',
+ *   networkType: guardian.NETWORK_TYPE.ZERA
+ * }));
+ * ```
+ * 
+ * ## Submit VAA Functions
+ * 
+ * @example
+ * ```typescript
+ * import { Connection, Keypair } from '@solana/web3.js';
+ * import { guardian } from '@zera-os/zera.js';
+ * 
+ * // Submit VAA to Solana (auto-fetch, build, and submit)
+ * const result = await guardian.submitVAAToSolana({
+ *   txnHash: 'zera-txn-hash',
+ *   guardianConfig: { host: 'guardian.zerascan.io' },
+ *   connection: new Connection('https://api.mainnet-beta.solana.com'),
+ *   payer: Keypair.fromSecretKey(yourSecretKey)
+ * });
+ * 
+ * console.log('Solana signature:', result.signature);
+ * ```
+ */
+
+// ============================================================================
+// SERVICE (for use with createClient)
+// ============================================================================
+
+export { GuardianService } from '../../../../../proto/generated/guardian_connect.js';
+
+// ============================================================================
+// VAA FUNCTIONS
+// ============================================================================
+
+export {
+  // Main VAA submit functions
+  submitVAAToSolana,
+  submitVAAToZera,
+  
+  // VAA fetch helpers (for manual control)
+  fetchSolanaVAA,
+  fetchZeraVAA,
+  
+  // Types
+  type SubmitVAAToSolanaOptions,
+  type SubmitVAAToSolanaResult,
+  type SubmitVAAToZeraOptions,
+  type SubmitVAAToZeraResult,
+  type VAARetryOptions
+} from './vaa.js';
+
+// ============================================================================
+// PROTO TYPES
+// ============================================================================
+
+export {
+  // Request/Response types
+  PayloadRequest,
+  PayloadResponse,
+  SearchPayloadRequest,
+  SearchPayloadResponse,
+  
+  // Payload container types
+  ZeraPayload,
+  SolanaPayload,
+  
+  // ZERA payload types
+  ZeraContractPayload,
+  ZeraMintPayload,
+  ZeraReleasePayload,
+  ZeraRefundPayload,
+  
+  // Solana payload types
+  SolanaContractPayload,
+  SolanaMintPayload,
+  SolanaReleasePayload,
+  SolanaRegisterPayload,
+  SolanaPausePayload,
+  SolanaUpgradeBridgePayload,
+  SolanaUpdateGuardianKeysPayload,
+  
+  // Utility types
+  CreateSolanaContract,
+  ExistingContracts,
+  
+  // Enums
+  NETWORK_TYPE
+} from '../../../../../proto/generated/guardian_pb.js';

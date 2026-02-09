@@ -1,0 +1,253 @@
+/**
+ * Guardian Bridge Examples
+ * 
+ * This file demonstrates how to use the guardian VAA (Verified Action Approval) functions
+ * for completing cross-chain bridge transfers.
+ * 
+ * Each example is in its own function for easy individual testing.
+ * 
+ * @example
+ * Run all: npx tsx src/smart-contracts/use-cases/bridge/guardian/examples/guardian-examples.ts
+ * 
+ * @example
+ * Import and run individually:
+ * ```typescript
+ * import { fetchSolanaVAAExample, submitToSolanaExample } from './guardian-examples';
+ * await fetchSolanaVAAExample();
+ * ```
+ */
+
+import { Connection, Keypair } from '@solana/web3.js';
+import bs58 from 'bs58';
+
+import { PROTONET_GRPC_CONFIG } from '../../../../../shared/utils/testing-defaults/index.js';
+import { SOLANA_TEST_KEYS, SOLANA_TEST_RPC, ED25519_TEST_KEYS } from '../../../../../test-utils/index.js';
+import {
+  fetchSolanaVAA,
+  fetchZeraVAA,
+  submitVAAToSolana,
+  submitVAAToZera,
+  NETWORK_TYPE
+} from '../index.js';
+
+// ============================================================================
+// SHARED CONFIGURATION
+// ============================================================================
+
+/** Guardian service configuration */
+const GUARDIAN_CONFIG = {
+  host: 'guardian.zerascan.io',
+  protocol: 'https' as const,
+  port: 443
+};
+
+/** Solana connection using test RPC */
+const connection = new Connection(SOLANA_TEST_RPC.devnet);
+
+/** Solana test wallet */
+const solanaWallet = Keypair.fromSecretKey(bs58.decode(SOLANA_TEST_KEYS.primary.privateKey));
+
+/** ZERA network configuration (protonet) */
+const ZERA_CONFIG = PROTONET_GRPC_CONFIG;
+
+/** Fee amount in USD for bridge transactions */
+const FEE_AMOUNT_USD = '5.00'; // $5.00 USD
+
+/** Fee contract ID (defaults to ZRA) */
+const FEE_CONTRACT_ID = '$ZRA+0000';
+
+/** Sample transaction hashes for examples */
+const SAMPLE_ZERA_TXN_HASH = '0'.repeat(64);
+const SAMPLE_SOLANA_SIGNATURE = 'sample_solana_signature';
+
+// ============================================================================
+// EXAMPLE 1: Fetch Solana-bound VAA
+// ============================================================================
+
+/**
+ * Fetch a VAA for a ZERA → Solana transfer
+ * 
+ * Use this when a ZERA transaction needs to trigger a Solana release/mint.
+ * 
+ * @param zeraTxnHash - The ZERA transaction hash to fetch VAA for
+ */
+async function fetchSolanaVAAExample(zeraTxnHash?: string) {
+  console.log('--- Fetch Solana VAA ---\n');
+
+  const txnHash = zeraTxnHash || SAMPLE_ZERA_TXN_HASH;
+  
+  console.log(`Fetching VAA for ZERA transaction: ${txnHash.slice(0, 20)}...`);
+  console.log(`Guardian endpoint: ${GUARDIAN_CONFIG.host}`);
+  console.log('');
+
+  try {
+    const payload = await fetchSolanaVAA(txnHash, GUARDIAN_CONFIG);
+    
+    console.log('VAA Payload received:');
+    console.log(`  Type: ${payload.payload.case}`);
+    console.log('');
+    
+    return payload;
+  } catch (error) {
+    console.log('Note: This example requires a valid ZERA transaction hash.');
+    console.log(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.log('');
+    return null;
+  }
+}
+
+// ============================================================================
+// EXAMPLE 2: Fetch ZERA-bound VAA
+// ============================================================================
+
+/**
+ * Fetch a VAA for a Solana → ZERA transfer
+ * 
+ * Use this when a Solana transaction needs to trigger a ZERA release/mint.
+ * 
+ * @param solanaTxnSignature - The Solana transaction signature to fetch VAA for
+ */
+async function fetchZeraVAAExample(solanaTxnSignature?: string) {
+  console.log('--- Fetch ZERA VAA ---\n');
+
+  const txnSignature = solanaTxnSignature || SAMPLE_SOLANA_SIGNATURE;
+  
+  console.log(`Fetching VAA for Solana transaction: ${txnSignature.slice(0, 20)}...`);
+  console.log(`Guardian endpoint: ${GUARDIAN_CONFIG.host}`);
+  console.log('');
+
+  try {
+    const payload = await fetchZeraVAA(txnSignature, GUARDIAN_CONFIG);
+    
+    console.log('VAA Payload received:');
+    console.log(`  Type: ${payload.payload.case}`);
+    console.log('');
+    
+    return payload;
+  } catch (error) {
+    console.log('Note: This example requires a valid Solana transaction signature.');
+    console.log(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.log('');
+    return null;
+  }
+}
+
+// ============================================================================
+// EXAMPLE 3: Submit VAA to Solana
+// ============================================================================
+
+/**
+ * Submit a VAA to Solana to complete a ZERA → Solana bridge transfer
+ * 
+ * This fetches the VAA, builds the transaction, and submits it to Solana.
+ * 
+ * @param zeraTxnHash - The ZERA transaction hash that initiated the bridge
+ */
+async function submitToSolanaExample(zeraTxnHash?: string) {
+  console.log('--- Submit VAA to Solana ---\n');
+
+  const txnHash = zeraTxnHash || SAMPLE_ZERA_TXN_HASH;
+  
+  console.log(`Processing ZERA transaction: ${txnHash.slice(0, 20)}...`);
+  console.log(`Solana payer: ${solanaWallet.publicKey.toBase58()}`);
+  console.log(`RPC endpoint: ${SOLANA_TEST_RPC.devnet}`);
+  console.log('');
+
+  try {
+    const result = await submitVAAToSolana({
+      txnHash,
+      guardianConfig: GUARDIAN_CONFIG,
+      connection,
+      payer: solanaWallet,
+      skipPreflight: true
+    });
+    
+    console.log('VAA submitted to Solana successfully!');
+    console.log(`  Signature: ${result.signature}`);
+    console.log(`  Payload type: ${result.payload.payload.case}`);
+    console.log('');
+    
+    return result;
+  } catch (error) {
+    console.log('Note: This example requires a valid ZERA transaction hash.');
+    console.log(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.log('');
+    return null;
+  }
+}
+
+// ============================================================================
+// EXAMPLE 4: Submit VAA to ZERA
+// ============================================================================
+
+/**
+ * Submit a VAA to ZERA to complete a Solana → ZERA bridge transfer
+ * 
+ * This fetches the VAA and submits it to the ZERA network.
+ * 
+ * @param solanaTxnSignature - The Solana transaction signature that initiated the bridge
+ */
+async function submitToZeraExample(solanaTxnSignature?: string) {
+  console.log('--- Submit VAA to ZERA ---\n');
+
+  const txSignature = solanaTxnSignature || SAMPLE_SOLANA_SIGNATURE;
+  
+  console.log(`Processing Solana transaction: ${txSignature.slice(0, 20)}...`);
+  console.log(`ZERA public key: ${ED25519_TEST_KEYS.alice.publicKey.slice(0, 20)}...`);
+  console.log('');
+
+  try {
+    const result = await submitVAAToZera({
+      txSignature,
+      guardianConfig: GUARDIAN_CONFIG,
+      zeraConfig: ZERA_CONFIG,
+      publicKeyBase58: ED25519_TEST_KEYS.alice.publicKey,
+      privateKeyBase58: ED25519_TEST_KEYS.alice.privateKey,
+      feeAmountUsd: FEE_AMOUNT_USD,
+      feeId: FEE_CONTRACT_ID
+    });
+    
+    console.log('VAA submitted to ZERA successfully!');
+    console.log(`  Transaction hash: ${result.txnHash}`);
+    console.log(`  Payload type: ${result.payload.payload.case}`);
+    console.log('');
+    
+    return result;
+  } catch (error) {
+    console.log('Note: This example requires a valid Solana transaction signature.');
+    console.log(`Error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    console.log('');
+    return null;
+  }
+}
+
+
+// ============================================================================
+// RUN EXAMPLES
+// ============================================================================
+// Uncomment the example(s) you want to run:
+
+// Individual examples:
+// fetchSolanaVAAExample("41dc92a1fd86ed1aa1b8134abf0a68d8791c38270caad472b9d8efcee947cd73").catch(console.error);
+// fetchZeraVAAExample("3j8EWWhQeGETD4gpURWsReDhqsHiRB4HqN2zhvEqJH7ejnJuLSqRKxHxPdjTYC4i8higbPXDrH8Ef54U5CS644wu").catch(console.error);
+// submitToSolanaExample("8a04240a4131615670790c52e879255e2c7246de86b43269ef3d800d8c6cc419").catch(console.error);
+// submitToZeraExample("4sJCPw15e7d3NTQbvxt4qaDgSpjTEFscVXtX3m9FuhkHeD2QnNuxhqbTaRRrXn7vF4ky1sTyv29bjYFZLvkvXJqc").catch(console.error); //? success
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
+export {
+  // Individual example functions
+  fetchSolanaVAAExample,
+  fetchZeraVAAExample,
+  submitToSolanaExample,
+  submitToZeraExample,
+  
+  // Shared configuration (useful for custom tests)
+  GUARDIAN_CONFIG,
+  connection,
+  solanaWallet,
+  SAMPLE_ZERA_TXN_HASH,
+  SAMPLE_SOLANA_SIGNATURE
+};

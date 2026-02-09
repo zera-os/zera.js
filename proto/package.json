@@ -1,0 +1,40 @@
+{
+  "name": "zera-proto",
+  "version": "1.0.0",
+  "description": "Zera Protocol Buffer definitions and build tools",
+  "main": "index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "node build.ts",
+    "build:js": "protoc --js_out=./generated --js_opt=import_style=es6 *.proto",
+    "build:ts": "protoc --js_out=./generated --ts_out=./generated *.proto",
+    "build:grpc": "protoc --js_out=./generated --grpc-web_out=./generated --plugin=protoc-gen-grpc-web=./node_modules/.bin/protoc-gen-grpc-web *.proto",
+    "build:modern": "buf generate",
+    "build:typescript": "node build.ts",
+    "clean": "rimraf generated",
+    "postinstall": "npm run build"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^1.10.0",
+    "@bufbuild/protoc-gen-es": "^1.10.0",
+    "@connectrpc/connect": "^1.6.0",
+    "@connectrpc/protoc-gen-connect-es": "^1.6.0",
+    "grpc-web": "^1.4.2"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.58.0",
+    "rimraf": "^5.0.0",
+    "typescript": "^5.0.0"
+  },
+  "keywords": [
+    "protobuf",
+    "grpc",
+    "zera",
+    "blockchain"
+  ],
+  "author": "",
+  "license": "MIT"
+}

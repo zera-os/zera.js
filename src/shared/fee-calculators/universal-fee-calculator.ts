@@ -1,0 +1,1001 @@
+/**
+ * Universal Fee Calculator for ZERA JS SDK
+ * Handles network fees (base fees), contract-specific fees, and interface fees with automatic or manual specification
+ */
+
+import {
+  CoinTXN,
+  MintTXN,
+  ItemizedMintTXN,
+  InstrumentContract,
+  GovernanceVote,
+  GovernanceProposal,
+  SmartContractTXN,
+  SmartContractExecuteTXN,
+  SmartContractInstantiateTXN,
+  ExpenseRatioTXN,
+  NFTTXN,
+  ContractUpdateTXN,
+  DelegatedTXN,
+  QuashTXN,
+  FastQuorumTXN,
+  RevokeTXN,
+  ComplianceTXN,
+  BurnSBTTXN,
+  AllowanceTXN,
+  ValidatorRegistration,
+  ValidatorHeartbeat,
+  ProposalResult,
+  RequiredVersion,
+  CONTRACT_FEE_TYPE,
+  ContractFees
+} from '../../../proto/generated/txn_pb.js';
+import { getTokenFeeInfo } from '../../api/handler/token-info/service.js';
+import type { 
+  AmountInput,
+  GRPCConfig
+} from '../../types/index.js';
+import { getHashTypesFromPublicKey, getKeyTypeFromPublicKey, getPublicKeyIdentifierFromBytes, sanitizeAndDecodeAddress } from '../crypto/address-utils.js';
+import { KEY_TYPE } from '../crypto/constants.js';
+import { logger } from '../monitoring/index.js';
+import { 
+  TRANSACTION_TYPE
+} from '../protobuf/index.js';
+import { 
+  toDecimal, 
+  Decimal 
+} from '../utils/amount-utils.js';
+import { type TokenInfo } from '../utils/token-info.js';
+import { toSmallestUnits } from '../utils/unified-amount-conversion.js';
+
+import { 
+  HASH_SIZE, 
+  PROTOBUF_HASH_OVERHEAD,
+  PROTOBUF_BASE_SIGNATURE_OVERHEAD,
+  PROTOBUF_AUTH_SIGNATURE_OVERHEAD,
+  getFeeConstants,
+  updateFeeConstants,
+  getSignatureSize,
+  getPerByteFeeConstant,
+  getKeyFee,
+  getHashFee
+} from './base-fee-constants.js';
+import { getDenominationFallback, getDecimalPlacesFromDenomination } from './denomination-fallback.js';
+import { ExchangeRateService } from './exchange-rate-service.js';
+
+/**
+ * Union type of all possible transaction types
+ */
+export type TransactionMessage = 
+  | CoinTXN
+  | MintTXN
+  | ItemizedMintTXN
+  | InstrumentContract
+  | GovernanceVote
+  | GovernanceProposal
+  | SmartContractTXN
+  | SmartContractExecuteTXN
+  | SmartContractInstantiateTXN
+  | ExpenseRatioTXN
+  | NFTTXN
+  | ContractUpdateTXN
+  | DelegatedTXN
+  | QuashTXN
+  | FastQuorumTXN
+  | RevokeTXN
+  | ComplianceTXN
+  | BurnSBTTXN
+  | AllowanceTXN
+  | ValidatorRegistration
+  | ValidatorHeartbeat
+  | ProposalResult
+  | RequiredVersion;
+
+/**
+ * Type guard to check if an object is a CoinTXN
+ */
+function isCoinTXN(obj: unknown): obj is CoinTXN {
+  return obj instanceof CoinTXN;
+}
+
+/**
+ * Type guard to check if an object has auth property (CoinTXN)
+ */
+function hasAuthProperty(obj: unknown): obj is { auth: unknown } {
+  return !!(obj && typeof obj === 'object' && 'auth' in (obj as Record<string, unknown>));
+}
+
+/**
+ * Type guard to check if an object has base property
+ */
+function hasBaseProperty(obj: unknown): obj is { base: unknown } {
+  return !!(obj && typeof obj === 'object' && 'base' in (obj as Record<string, unknown>));
+}
+
+/**
+ * Fee configuration (user-configurable)
+ * Will automatically calculate base fee is baseFee is not provide (baseFeeId can be provided, but defaults to '$ZRA+0000' if not provided)
+ * Will automatically calculate contract fee if contractFee is not provided (contractFeeId can be provided, but defaults to contractId if not provided)
+ * Will never auto calculate interface fee. You must specify interfaceFeeId and interfaceFee
+ * Any specification of fee units can be done in the WHOLE amount of the token. Example, 1.5 ZRA will be converted to 1500000000
+ * overestimatePercent is the MAXIMUM overestimate - the network will only take the correct amount. Only applies to base fee and contract fee, not interface fee. Applies to auto calculation and manual specification. Specify 0% if you do not want any overestimate buffer!
+ */
+export interface FeeConfig {
+  /** Base fee instrument ID (defaults to '$ZRA+0000') */
+  baseFeeId?: string;
+  /** Base fee amount in user-friendly units (auto-calculated if not provided) */
+  baseFee?: AmountInput;
+  /** Contract fee instrument (defaults to contractId) */
+  contractFeeId?: string;
+  /** Contract fee amount in user-friendly units (auto-calculated if not provided) */
+  contractFee?: AmountInput;
+  /** Interface fee contract ID (triggers interface fee calculation) */
+  interfaceFeeId?: string;
+  /** Interface fee amount (required if interfaceFeeId is specified) */
+  interfaceFee?: AmountInput;
+  /** Interface provider address (required if interfaceFeeId is specified) */
+  interfaceAddress?: string;
+  /** 
+   * Overestimate percentage to add to final fee (defaults to 5.0%)
+   * Supports decimal values (e.g., 0.1 for 0.1%, 5.0 for 5.0%)
+   * This is the MAXIMUM overestimate - the network will only take the correct amount
+   */
+  overestimatePercent?: number;
+  /**
+   * Gas fee in USD. Only applicable for SmartContractExecuteTXN transactions.
+   * This represents the computational cost fee for smart contract execution.
+   * Gas costs vary significantly - simple functions may cost a few cents (1500-2000 gas units),
+   * while complex operations can cost much more (tens of thousands of gas units).
+   * The gas price is set by the network (currently 0.0025 cents per gas unit, configurable via governance).
+   * This fee is added on top of the base transaction fee (which covers transaction size).
+   * If enough gas is not provided, the execution will fail and ALL transactions run or states within will be reverted as if the execute never happened.
+   * 
+   * @example
+   * gasFeeInUsd: 0.50  // 50 cents USD
+   * gasFeeInUsd: 1.0   // 1 dollar USD
+   */
+  gasFeeInUsd?: number;
+  /** Optional gRPC configuration for network calls */
+  grpcConfig?: GRPCConfig;
+}
+
+/**
+ * Fee config helper with for use within fee calculation -- internally filled
+ */
+export interface FeeConfigHelper<T extends TransactionMessage = TransactionMessage> extends FeeConfig {
+  /**
+   * Contract ID. Only required for CoinTXN transactions (for contract fee calculation).
+   * For other transaction types, this can be omitted.
+   */
+  contractId?: string;
+  protoObject: T;
+  tokenInfoMap: Map<string, TokenInfo>;
+}
+
+
+/**
+ * Extract transaction type from a protobuf object
+ */
+function extractTransactionTypeFromProtoObject(protoObject: TransactionMessage): number {
+  try {
+    if (protoObject instanceof CoinTXN) return TRANSACTION_TYPE.COIN_TYPE;
+    if (protoObject instanceof MintTXN) return TRANSACTION_TYPE.MINT_TYPE;
+    if (protoObject instanceof ItemizedMintTXN) return TRANSACTION_TYPE.ITEM_MINT_TYPE;
+    if (protoObject instanceof InstrumentContract) return TRANSACTION_TYPE.CONTRACT_TXN_TYPE;
+    if (protoObject instanceof GovernanceVote) return TRANSACTION_TYPE.VOTE_TYPE;
+    if (protoObject instanceof GovernanceProposal) return TRANSACTION_TYPE.PROPOSAL_TYPE;
+    if (protoObject instanceof SmartContractTXN) return TRANSACTION_TYPE.SMART_CONTRACT_TYPE;
+    if (protoObject instanceof SmartContractExecuteTXN) return TRANSACTION_TYPE.SMART_CONTRACT_EXECUTE_TYPE;
+    if (protoObject instanceof ExpenseRatioTXN) return TRANSACTION_TYPE.EXPENSE_RATIO_TYPE;
+    if (protoObject instanceof NFTTXN) return TRANSACTION_TYPE.NFT_TYPE;
+    if (protoObject instanceof ContractUpdateTXN) return TRANSACTION_TYPE.UPDATE_CONTRACT_TYPE;
+    if (protoObject instanceof ValidatorRegistration) return TRANSACTION_TYPE.VALIDATOR_REGISTRATION_TYPE;
+    if (protoObject instanceof ValidatorHeartbeat) return TRANSACTION_TYPE.VALIDATOR_HEARTBEAT_TYPE;
+    if (protoObject instanceof ProposalResult) return TRANSACTION_TYPE.PROPOSAL_RESULT_TYPE;
+    if (protoObject instanceof DelegatedTXN) return TRANSACTION_TYPE.DELEGATED_VOTING_TYPE;
+    if (protoObject instanceof RevokeTXN) return TRANSACTION_TYPE.REVOKE_TYPE;
+    if (protoObject instanceof QuashTXN) return TRANSACTION_TYPE.QUASH_TYPE;
+    if (protoObject instanceof FastQuorumTXN) return TRANSACTION_TYPE.FAST_QUORUM_TYPE;
+    if (protoObject instanceof ComplianceTXN) return TRANSACTION_TYPE.COMPLIANCE_TYPE;
+    if (protoObject instanceof BurnSBTTXN) return TRANSACTION_TYPE.SBT_BURN_TYPE;
+    if (protoObject instanceof RequiredVersion) return TRANSACTION_TYPE.REQUIRED_VERSION;
+    if (protoObject instanceof SmartContractInstantiateTXN) return TRANSACTION_TYPE.SMART_CONTRACT_INSTANTIATE_TYPE;
+    if (protoObject instanceof AllowanceTXN) return TRANSACTION_TYPE.ALLOWANCE_TYPE;
+    
+    // If we can't determine the type, throw an error
+    throw new Error('Unable to determine transaction type from protoObject structure');
+  } catch (error) {
+    throw new Error(`Failed to extract transaction type from protoObject: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Extract key types and restricted status from a transaction protobuf object
+ */
+function extractKeyTypesFromTransaction(protoObject: TransactionMessage): { keyTypes: string[], isRestricted: boolean } {
+  const keyTypes: string[] = [];
+  let isRestricted = false;
+  
+  try {
+    // Check if this is a CoinTXN (has auth field with publicKey array)
+    if (hasAuthProperty(protoObject) && 
+        typeof protoObject.auth === 'object' && 
+        protoObject.auth !== null &&
+        'publicKey' in protoObject.auth && 
+        Array.isArray((protoObject.auth as Record<string, unknown>).publicKey)) {
+      // CoinTXN: extract key types from TransferAuthentication.publicKey array
+      const authObj = protoObject.auth as Record<string, unknown>;
+      for (const publicKey of authObj.publicKey as unknown[]) {
+        if (typeof publicKey === 'object' && publicKey !== null && 'single' in publicKey) {
+          const publicKeyObj = publicKey as Record<string, unknown>;
+          // Single key - convert bytes back to string identifier for key type detection
+          const publicKeyString = getPublicKeyIdentifierFromBytes(publicKeyObj.single as Uint8Array);
+          
+          // Check if this public key is restricted (starts with 'r_')
+          if (publicKeyString.startsWith('r_')) {
+            isRestricted = true;
+          }
+          
+          const keyType = getKeyTypeFromPublicKey(publicKeyString);
+          keyTypes.push(keyType);
+        } else if (typeof publicKey === 'object' && publicKey !== null && 'multi' in publicKey) {
+          const publicKeyObj = publicKey as Record<string, unknown>;
+          if (publicKeyObj.multi && typeof publicKeyObj.multi === 'object' && publicKeyObj.multi !== null && 'publicKeys' in publicKeyObj.multi) {
+            throw new Error('Multi-signature wallets are not currentlysupported in the SDK');
+          }
+        }
+      }
+    } else if (hasBaseProperty(protoObject) && 
+               typeof protoObject.base === 'object' && 
+               protoObject.base !== null &&
+               'publicKey' in protoObject.base) {
+      // Non-CoinTXN: extract key type from BaseTXN.public_key
+      const baseObj = protoObject.base as unknown as Record<string, unknown>;
+      const publicKey = baseObj.publicKey;
+      if (typeof publicKey === 'object' && publicKey !== null && 'single' in publicKey) {
+        const publicKeyObj = publicKey as Record<string, unknown>;
+        const publicKeyString = getPublicKeyIdentifierFromBytes(publicKeyObj.single as Uint8Array);
+        
+        // Check if this public key is restricted (starts with 'r_')
+        if (publicKeyString.startsWith('r_')) {
+          isRestricted = true;
+        }
+        
+        const keyType = getKeyTypeFromPublicKey(publicKeyString);
+        keyTypes.push(keyType);
+      } else if (typeof publicKey === 'object' && publicKey !== null && 'multi' in publicKey) {
+        const publicKeyObj = publicKey as Record<string, unknown>;
+        if (publicKeyObj.multi && typeof publicKeyObj.multi === 'object' && publicKeyObj.multi !== null && 'publicKeys' in publicKeyObj.multi) {
+          logger.warn('Multi-signature wallet not currently supported', {
+            operation: 'extractHashTypes',
+            walletType: 'multi-signature'
+          });
+          throw new Error('Multi-signature wallet not currently supported in SDK');
+        }
+      }
+    }
+  } catch (error) {
+    throw new Error(`Failed to extract key types from transaction: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  
+  // Throw error if no key types found
+  if (keyTypes.length === 0) {
+    if (hasAuthProperty(protoObject) && 
+        typeof protoObject.auth === 'object' && 
+        protoObject.auth !== null &&
+        'publicKey' in protoObject.auth) {
+      throw new Error('Failed to detect key types from CoinTXN transaction. Check that publicKey array contains valid key structures.');
+    } else if (hasBaseProperty(protoObject) && 
+               typeof protoObject.base === 'object' && 
+               protoObject.base !== null &&
+               'publicKey' in protoObject.base) {
+      throw new Error('Failed to detect key type from BaseTXN transaction. Check that publicKey contains valid key structure.');
+    } else {
+      throw new Error('Failed to detect key types from transaction. Transaction must have either auth.publicKey (CoinTXN) or base.publicKey (other types).');
+    }
+  }
+  
+  return { keyTypes, isRestricted };
+}
+
+/**
+ * Extract hash types from a transaction protobuf object
+ */
+function extractHashTypesFromTransaction(protoObject: TransactionMessage): string[] {
+  const hashTypes: string[] = [];
+  
+  try {
+    // Check if this is a CoinTXN (has auth field with publicKey array)
+    if (hasAuthProperty(protoObject) && 
+        typeof protoObject.auth === 'object' && 
+        protoObject.auth !== null &&
+        'publicKey' in protoObject.auth && 
+        Array.isArray((protoObject.auth as Record<string, unknown>).publicKey)) {
+      // CoinTXN: extract hash types from TransferAuthentication.publicKey array
+      const authObj = protoObject.auth as Record<string, unknown>;
+      for (const publicKey of authObj.publicKey as unknown[]) {
+        if (typeof publicKey === 'object' && publicKey !== null && 'single' in publicKey) {
+          const publicKeyObj = publicKey as Record<string, unknown>;
+          // Single key - convert bytes back to string identifier for hash type detection
+          let publicKeyString = getPublicKeyIdentifierFromBytes(publicKeyObj.single as Uint8Array);
+          
+          // Remove 'r_' prefix if present to get clean hash types
+          if (publicKeyString.startsWith('r_')) {
+            publicKeyString = publicKeyString.substring(2);
+          }
+          
+          try {
+            const keyHashTypes = getHashTypesFromPublicKey(publicKeyString);
+            hashTypes.push(...keyHashTypes);
+          } catch {
+            // If we can't extract hash types from this key, skip it
+          }
+        } else if (typeof publicKey === 'object' && publicKey !== null && 'multi' in publicKey) {
+          const publicKeyObj = publicKey as Record<string, unknown>;
+          if (publicKeyObj.multi && typeof publicKeyObj.multi === 'object' && publicKeyObj.multi !== null && 'publicKeys' in publicKeyObj.multi) {
+            throw new Error('multi signature wallet not currently supported in SDK');
+          }
+        }
+      }
+    } else if (hasBaseProperty(protoObject) && 
+               typeof protoObject.base === 'object' && 
+               protoObject.base !== null &&
+               'publicKey' in protoObject.base) {
+      // Non-CoinTXN: extract hash types from BaseTXN.public_key
+      const baseObj = protoObject.base as unknown as Record<string, unknown>;
+      const publicKey = baseObj.publicKey;
+      if (typeof publicKey === 'object' && publicKey !== null && 'single' in publicKey) {
+        const publicKeyObj = publicKey as Record<string, unknown>;
+        let publicKeyString = getPublicKeyIdentifierFromBytes(publicKeyObj.single as Uint8Array);
+        
+        // Remove 'r_' prefix if present to get clean hash types
+        if (publicKeyString.startsWith('r_')) {
+          publicKeyString = publicKeyString.substring(2);
+        }
+        
+        try {
+          const keyHashTypes = getHashTypesFromPublicKey(publicKeyString);
+          hashTypes.push(...keyHashTypes);
+        } catch {
+          // If we can't extract hash types from this key, skip it
+        }
+      } else if (typeof publicKey === 'object' && publicKey !== null && 'multi' in publicKey) {
+        const publicKeyObj = publicKey as Record<string, unknown>;
+        if (publicKeyObj.multi && typeof publicKeyObj.multi === 'object' && publicKeyObj.multi !== null && 'publicKeys' in publicKeyObj.multi) {
+          logger.warn('Multi-signature wallet not currently supported', {
+            operation: 'extractHashTypes',
+            walletType: 'multi-signature'
+          });
+          throw new Error('Multi-signature wallet not currently supported in SDK');
+        }
+      }
+    }
+  } catch (error) {
+    throw new Error(`Failed to extract hash types from transaction: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  
+  // If no hash types found, return empty array (transaction might not have hash types)
+  return hashTypes;
+}
+
+/**
+ * Calculate total transaction size from protobuf object + signatures + hashes
+ */
+function calculateTotalTransactionSize(protoObject: TransactionMessage): number {
+  // Auto-detect transaction type from protobuf object
+  const detectedTransactionType = extractTransactionTypeFromProtoObject(protoObject);
+  
+  // Check if transaction type is valid (0 is a valid transaction type, so check for null/undefined)
+  if (detectedTransactionType === null || detectedTransactionType === undefined) {
+    throw new Error('detectedTransactionType is null or undefined');
+  }
+  
+  // Get the serialized size of the protobuf object using .toBinary()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const binary = (protoObject as any).toBinary();
+  const protoSize = binary.length;
+  
+  // Auto-detect key types from transaction
+  const { keyTypes } = extractKeyTypesFromTransaction(protoObject);
+  
+  // Calculate signature sizes
+  let signatureSize = 0;
+  for (const keyType of keyTypes) {
+    const rawSignatureSize = getSignatureSize(keyType);
+
+    if (detectedTransactionType === TRANSACTION_TYPE.COIN_TYPE) {
+      signatureSize += rawSignatureSize + PROTOBUF_AUTH_SIGNATURE_OVERHEAD;
+    } else {
+      signatureSize += rawSignatureSize + PROTOBUF_BASE_SIGNATURE_OVERHEAD;
+    }
+  }
+  
+  // Accomodate single ED448 key signature overhead (inferred cause of calculation issue based on integration testing)
+  if (keyTypes.length === 1 && keyTypes[0] === KEY_TYPE.ED448) {
+    signatureSize += 1;
+  }
+    
+  // Calculate hash size with protobuf overhead
+  const totalHashSize = HASH_SIZE + PROTOBUF_HASH_OVERHEAD;
+  
+  return protoSize + signatureSize + totalHashSize;
+}
+
+/**
+ * Calculate contract fee using the service
+ */
+function calculateContractFee(
+  protoObject: TransactionMessage,
+  contractFeeId: string | undefined,
+  contractFee: AmountInput | undefined,
+  tokenInfoMap?: Map<string, TokenInfo>,
+  overestimatePercent: number = 5.0
+): void {
+  try {
+    // Extract contract ID and outputs directly from the protobuf object
+    const contractId = isCoinTXN(protoObject) ? protoObject.contractId : 'invalid';
+
+    if (contractId === 'invalid') {
+      throw new Error('contractId not found');
+    }
+
+    // Handle manual contract fee - skip all calculation, validation, and overestimation
+    if (contractFee !== undefined && contractFeeId) {
+      const contractFeeInSmallestUnits = toSmallestUnits(contractFee, contractFeeId, tokenInfoMap ? { tokenInfoMap } : {});
+
+      logger.warn('Manual contract fee specified - skipping fee calculation and validation. Fee is not validated and may be insufficient, causing transaction failure.', {
+        contractFeeId,
+        providedFee: contractFeeInSmallestUnits,
+        operation: 'manualContractFee'
+      });
+
+      // Set the contract fee directly (no overestimation for manual fees)
+      const coinTxnProto = protoObject as CoinTXN;
+      coinTxnProto.contractFeeId = contractFeeId;
+      coinTxnProto.contractFeeAmount = contractFeeInSmallestUnits;
+      return;
+    }
+
+    const outputTransfers = isCoinTXN(protoObject) ? (protoObject.outputTransfers || []) : [];
+
+    const contractFeeInfo = tokenInfoMap?.get(contractId)?.contractFees;
+
+    let transactionAmount = '0';
+    if (contractFeeInfo && Object.keys(contractFeeInfo).length > 0) {
+
+      // Check if contract allows any fee instruments at all
+      if (!contractFeeInfo.allowedFeeInstrument || contractFeeInfo.allowedFeeInstrument.length === 0) {
+        // Contract doesn't allow fee instruments, skip contract fee
+        return;
+      }
+
+      // Default contractFeeId to contractId if undefined
+      contractFeeId = contractFeeId || contractId;
+
+      // Check to see is contractFeeId is a valid for this contractID
+      if (contractFeeInfo.allowedFeeInstrument && !contractFeeInfo.allowedFeeInstrument.includes(contractFeeId)) {
+        logger.warn('Contract fee ID not allowed for contract', {
+          contractId,
+          contractFeeId,
+          allowedFeeInstrument: contractFeeInfo.allowedFeeInstrument,
+          operation: 'validateContractFeeId'
+        });
+      }
+      
+      // Get the current token rate for converting transaction amount to USD
+      const currentTokenInfo = tokenInfoMap?.get(contractId);
+      if (!currentTokenInfo?.rate) {
+        throw new Error(`Exchange rate not available for contract ${contractId}`);
+      }
+      
+      // Calculate total transaction amount
+      const outputAmounts = outputTransfers.map((o: { amount: string | number }) => toDecimal(o.amount));
+      const totalTransactionAmountInSmallestUnits = outputAmounts.reduce((sum: Decimal, amount: Decimal) => {
+        return sum.add(amount);
+      }, new Decimal(0));
+      let denominationDecimals: number;
+      if (currentTokenInfo.denomination) {
+        denominationDecimals = getDecimalPlacesFromDenomination(currentTokenInfo.denomination);
+      } else {
+        const fallbackDenomination = getDenominationFallback(contractId);
+        denominationDecimals = getDecimalPlacesFromDenomination(fallbackDenomination);
+      }
+      
+      // Convert smallest units to USD value
+      // Formula: ((smallest_units / 10^denomination_decimals) * rate) / 1e18 = USD value
+      const transactionAmountInTokenUnits = toDecimal(totalTransactionAmountInSmallestUnits).div(new Decimal(10).pow(denominationDecimals));
+      const rateDecimal = toDecimal(currentTokenInfo.rate);
+      const usdValueScaled = transactionAmountInTokenUnits.mul(rateDecimal);
+      
+      // Helper function to get fee token info and decimals
+      const getFeeTokenInfo = (feeContractId: string) => {
+        const feeTokenInfo = tokenInfoMap?.get(feeContractId);
+        if (!feeTokenInfo?.rate) {
+          throw new Error(`Exchange rate not available for fee contract ${feeContractId}`);
+        }
+        
+        let feeTokenDecimals: number;
+        if (feeTokenInfo.denomination) {
+          feeTokenDecimals = getDecimalPlacesFromDenomination(feeTokenInfo.denomination);
+        } else {
+          const feeTokenFallbackDenomination = getDenominationFallback(feeContractId);
+          feeTokenDecimals = getDecimalPlacesFromDenomination(feeTokenFallbackDenomination);
+        }
+        
+        return { feeTokenInfo, feeTokenDecimals };
+      };
+
+      // Helper function to convert USD amount to fee token smallest units
+      const convertUsdToFeeTokenSmallestUnits = (usdAmount: Decimal, feeContractId: string): string => {
+        const { feeTokenInfo, feeTokenDecimals } = getFeeTokenInfo(feeContractId);
+        const feeTokenRateDecimal = toDecimal(feeTokenInfo.rate);
+        const feeTokenUnitsDecimal = usdAmount.div(feeTokenRateDecimal);
+        const feeTokenAmountDecimal = feeTokenUnitsDecimal.mul(new Decimal(10).pow(feeTokenDecimals));
+        return feeTokenAmountDecimal.floor().toString();
+      };
+
+      // Calculate transaction amount based on fee type
+      if (contractFeeInfo.contractFeeType === CONTRACT_FEE_TYPE.FIXED) {
+        // Fixed fee - feeAmountDecimal is the number of token units, not USD value
+        transactionAmount = contractFeeInfo.fee;
+        
+        // If fee is not in the contractId token, need conversions
+        if (contractFeeId !== contractId) {
+          const feeAmountDecimal = toDecimal(contractFeeInfo.fee);
+          const feeAmountInUsd = feeAmountDecimal.mul(new Decimal(10).pow(-denominationDecimals)).mul(rateDecimal);
+          transactionAmount = convertUsdToFeeTokenSmallestUnits(feeAmountInUsd, contractFeeId);
+        }
+        
+      } else if (contractFeeInfo.contractFeeType === CONTRACT_FEE_TYPE.CUR_EQUIVALENT) { 
+        // Currency equivalent fee - convert USD amount to fee contract ID
+        const feeAmountDecimal = toDecimal(contractFeeInfo.fee);
+        
+        transactionAmount = convertUsdToFeeTokenSmallestUnits(feeAmountDecimal, contractFeeId);        
+      } else if (contractFeeInfo.contractFeeType === CONTRACT_FEE_TYPE.PERCENTAGE){
+        // Percentage fee - contractFeeInfo.fee is in smallest units where 1e18 = 100%
+        const feePercentageDecimal = toDecimal(contractFeeInfo.fee);
+        
+        if (contractFeeId !== contractId) {
+          // Convert smallest units to percentage (1e18 = 100%), then calculate USD equivalent
+          const percentageValue = feePercentageDecimal.div(new Decimal(10).pow(18)).mul(100);
+          const percentageOfTransactionUSD = usdValueScaled.mul(percentageValue).div(100);
+          transactionAmount = convertUsdToFeeTokenSmallestUnits(percentageOfTransactionUSD, contractFeeId);
+        } else {
+          // Same currency - convert smallest units to percentage, then calculate directly
+          const percentageValue = feePercentageDecimal.div(new Decimal(10).pow(18)).mul(100);
+          const percentageOfTransaction = totalTransactionAmountInSmallestUnits.mul(percentageValue).div(100);
+          transactionAmount = percentageOfTransaction.floor().toString();
+        }
+
+      } else if (contractFeeInfo.contractFeeType === CONTRACT_FEE_TYPE.NONE) {
+        return;
+      } else {
+        logger.warn('Unsupported contract fee type', {
+          contractFeeType: contractFeeInfo.contractFeeType,
+          operation: 'calculateContractFee'
+        });
+        return;
+      }
+                  
+    } else {
+      return;
+    }
+
+    // Apply overestimation to fee
+    if (overestimatePercent > 0) {
+      const overestimateMultiplier = new Decimal(100 + overestimatePercent).div(100);
+      const overestimatedFeeDecimal = toDecimal(transactionAmount).mul(overestimateMultiplier);
+      transactionAmount = overestimatedFeeDecimal.floor().toString();
+    }
+
+    // Add contract fee fields to protoObject for TRANSACTION_TYPE.COIN_TYPE
+    if (contractFeeId && transactionAmount) {
+      const coinTxnProto = protoObject as CoinTXN;
+      coinTxnProto.contractFeeId = contractFeeId;
+      coinTxnProto.contractFeeAmount = transactionAmount;
+    }
+    
+  } catch (error) {
+    throw new Error(`Contract fee calculation failed: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+/**
+ * Calculate interface fee
+ */
+function calculateInterfaceFee(
+  protoObject: TransactionMessage,
+  interfaceFeeAmount?: AmountInput,
+  interfaceFeeId?: string,
+  interfaceAddress?: string,
+  tokenInfoMap?: Map<string, TokenInfo>
+): void {
+  if (!interfaceFeeAmount || !interfaceFeeId) {
+    return;
+  }
+
+  if (!interfaceAddress){
+    logger.warn('Interface address required for interface fee', {
+      operation: 'calculateInterfaceFee'
+    });
+    return;
+  }
+
+  // Convert interface fee to smallest units
+  const feeInSmallestUnits = toSmallestUnits(interfaceFeeAmount, interfaceFeeId, tokenInfoMap ? { tokenInfoMap } : {});
+
+  // Add interface fee fields to base object (works for all transaction types)
+  const txnProto = protoObject as { base?: { interfaceFee?: string; interfaceFeeId?: string; interfaceAddress?: Uint8Array } };
+  if (txnProto.base) {
+    txnProto.base.interfaceFee = feeInSmallestUnits;
+    txnProto.base.interfaceFeeId = interfaceFeeId;
+    if (interfaceAddress) {
+      txnProto.base.interfaceAddress = sanitizeAndDecodeAddress(interfaceAddress);
+    }
+  }
+}
+
+/**
+ * Calculate gas fee in smallest units from USD
+ */
+function calculateGasFee(
+  gasFeeInUsd: number,
+  baseFeeId: string,
+  tokenInfoMap?: Map<string, TokenInfo>
+): string {
+  const tokenInfo = tokenInfoMap?.get(baseFeeId);
+  if (!tokenInfo) {
+    throw new Error(`Token info not found for fee ID ${baseFeeId} when calculating gas fee`);
+  }
+
+  // Gas fee is provided in USD (e.g., 0.50 for 50 cents)
+  // Scale to 1e18 for precision: convert USD to scaled cents (multiply by 100 to get cents, then by 1e18)
+  const gasFeeInUsdScaled = new Decimal(gasFeeInUsd).mul(1e18);
+  
+  // Convert USD cents to fee token units using exchange rate
+  // Exchange rate is stored as: 1 fee token = X USD cents
+  const exchangeRate = tokenInfo.rate ? toDecimal(tokenInfo.rate) : new Decimal(1);
+  
+  // Gas fee in fee token units = gasFeeInCents / exchangeRate
+  const gasFeeInTokenUnits = gasFeeInUsdScaled.div(exchangeRate);
+  
+  // Get decimals for precision handling
+  let decimals: number;
+  if (tokenInfo.denomination) {
+    decimals = getDecimalPlacesFromDenomination(tokenInfo.denomination);
+  } else {
+    throw new Error(`Token info missing denomination for ${baseFeeId}`);
+  }
+  
+  // Round to proper precision
+  const precisionMultiplier = new Decimal(10).pow(decimals);
+  const roundedGasFee = gasFeeInTokenUnits.mul(precisionMultiplier).floor().div(precisionMultiplier);
+  
+  // Ensure minimum if rounding results in zero but original was > 0
+  const finalGasFee = roundedGasFee.equals(0) && gasFeeInTokenUnits.greaterThan(0)
+    ? new Decimal(10).pow(-decimals)
+    : roundedGasFee;
+  
+  // Convert to smallest units
+  return toSmallestUnits(finalGasFee.toString(), baseFeeId, tokenInfoMap ? { tokenInfoMap } : {});
+}
+
+/**
+ * Calculate network fee based on proto object
+ *! Note: This function may not be 100% accurate. Nominal testing indicates accuracy within >= 99.999999% (usually exact or 1 denomination unit greater). Minimal accuracy difference design choice for better code understandability rather than working strictly with scaled numbers.
+ *! Note: Suggest 'maximum' overestimation to account for edge cases such as changes in ACE rates after transaction calculation.
+ */
+function calculateNetworkFee(
+  protoObject: TransactionMessage,
+  transactionType: number,
+  baseFeeId: string = '$ZRA+0000',
+  baseFee: AmountInput | undefined,
+  tokenInfoMap?: Map<string, TokenInfo>,
+  overestimatePercent: number = 5.0,
+  gasFeeInUsd?: number
+): void {
+  // Handle manual base fee - skip all calculation, validation, and overestimation
+  if (baseFee !== undefined) {
+    const baseFeeInSmallestUnits = toSmallestUnits(baseFee, baseFeeId, tokenInfoMap ? { tokenInfoMap } : {});
+
+    logger.warn('Manual base fee specified - skipping fee calculation and validation. Fee is not validated and may be insufficient, causing transaction failure.', {
+      baseFeeId,
+      providedFee: baseFeeInSmallestUnits,
+      operation: 'manualBaseFee'
+    });
+
+    // Use the manual fee directly (no overestimation for manual fees)
+    let finalFee = baseFeeInSmallestUnits;
+
+    // Add gas fee if provided (only applicable for SmartContractExecuteTXN)
+    if (gasFeeInUsd !== undefined && gasFeeInUsd > 0) {
+      const gasFeeInSmallestUnits = calculateGasFee(gasFeeInUsd, baseFeeId, tokenInfoMap);
+      const baseFeeDecimal = toDecimal(finalFee);
+      const gasFeeDecimal = toDecimal(gasFeeInSmallestUnits);
+      finalFee = baseFeeDecimal.add(gasFeeDecimal).floor().toString();
+    }
+
+    // Set the base fee directly
+    const txnProto = protoObject as { base?: { feeAmount?: string; feeId?: string } };
+    if (txnProto.base) {
+      txnProto.base.feeAmount = finalFee;
+      txnProto.base.feeId = baseFeeId;
+    }
+    return;
+  }
+
+  // Calculate initial transaction size (with placeholder fee amount)
+  let transactionSize = calculateTotalTransactionSize(protoObject);
+  
+  // Get per-byte fee constant for this transaction type
+  const perByteFeeConstant = getPerByteFeeConstant(transactionType);
+
+  // Extract key types and restricted status from transaction
+  const { keyTypes, isRestricted } = extractKeyTypesFromTransaction(protoObject);
+  const hashTypes = extractHashTypesFromTransaction(protoObject);
+
+  // Calculate initial base network fee: transaction size * per-byte fee
+  const baseNetworkFeeEquiv = toDecimal(transactionSize).mul(toDecimal(perByteFeeConstant));
+  
+  // Calculate key fees
+  let totalKeyFees = new Decimal(0);
+  for (const keyType of keyTypes) {
+    // Apply restricted multiplier if the public key starts with 'r_'
+    const keyFee = getKeyFee(keyType, isRestricted);
+    totalKeyFees = totalKeyFees.add(toDecimal(keyFee));
+  }
+  
+  // Calculate hash fees
+  let totalHashFees = new Decimal(0);
+  for (const hashType of hashTypes) {
+    // Apply restricted multiplier if the public key starts with 'r_'
+    const hashFee = getHashFee(hashType, isRestricted);
+    totalHashFees = totalHashFees.add(toDecimal(hashFee));
+  }
+  
+  // Calculate initial total network fee: base fee + key fees + hash fees
+  const totalNetworkFeeScaled = baseNetworkFeeEquiv.add(totalKeyFees).add(totalHashFees).mul(1e18);
+  
+  // Get exchange rate for base fee
+  const tokenInfo = tokenInfoMap?.get(baseFeeId);
+  const exchangeRate = tokenInfo?.rate ? toDecimal(tokenInfo.rate) : new Decimal(1);
+
+  // Use precise division with proper rounding for base fees
+  const totalNetworkFee = totalNetworkFeeScaled.div(exchangeRate);
+  
+  // Get token fee info to determine precision from denomination
+  let decimals: number;
+  if (tokenInfoMap && tokenInfoMap.has(baseFeeId)) {
+    // Use cached token info for faster access and consistency
+    const tokenInfo = tokenInfoMap.get(baseFeeId);
+    if (tokenInfo?.denomination) {
+      decimals = getDecimalPlacesFromDenomination(tokenInfo.denomination);
+    } else {
+      throw new Error(`Unexpected error: Token info found but missing denomination for ${baseFeeId}`);
+    }
+  } else {
+    throw new Error(`Token info not found for base fee ID ${baseFeeId}`);
+  }
+  
+  // Round to the precision specified by the denomination
+  const precisionMultiplier = new Decimal(10).pow(decimals);
+  let roundedFee = totalNetworkFee.mul(precisionMultiplier).floor().div(precisionMultiplier);
+  
+  // Ensure minimum fee if rounding results in zero but original fee was > 0
+  if (roundedFee.equals(0) && totalNetworkFee.greaterThan(0)) {
+    roundedFee = new Decimal(10).pow(-decimals); // Set to minimum unit (1 satoshi)
+  }
+  
+  // Convert to smallest units with precise denomination-based precision
+  const conversionOptions: { isBaseFee: boolean; tokenInfoMap?: Map<string, TokenInfo> } = { isBaseFee: true };
+  if (tokenInfoMap) {
+    conversionOptions.tokenInfoMap = tokenInfoMap;
+  }
+  
+  let transactionAmount = toSmallestUnits(roundedFee.toString(), baseFeeId, conversionOptions);
+  
+  // Calculate the difference in size between placeholder '1' and actual fee
+  const placeholderFeeSize = 1; // Size of '1' in bytes
+  const actualFeeSize = transactionAmount.length; // Size of actual fee string in bytes
+  const feeSizeDifference = actualFeeSize - placeholderFeeSize;
+  
+  // If there's a size difference, recalculate the fee with the corrected transaction size
+  if (feeSizeDifference > 0) {
+    // Add the size difference to transaction size
+    const correctedTransactionSize = transactionSize + feeSizeDifference;
+    
+    // Recalculate base network fee with corrected size
+    const correctedBaseNetworkFeeEquiv = toDecimal(correctedTransactionSize).mul(toDecimal(perByteFeeConstant));
+    
+    // Recalculate total network fee
+    const correctedTotalNetworkFeeEquiv = correctedBaseNetworkFeeEquiv.add(totalKeyFees).add(totalHashFees).mul(1e18);
+    // Use precise division with proper rounding for base fees
+    const correctedTotalNetworkFee = correctedTotalNetworkFeeEquiv.div(exchangeRate);
+    
+    // Round to the precision specified by the denomination
+    const precisionMultiplier = new Decimal(10).pow(decimals);
+    const correctedRoundedFee = correctedTotalNetworkFee.mul(precisionMultiplier).floor().div(precisionMultiplier);
+    
+    // Update the fee in smallest units with precise denomination-based precision
+    transactionAmount = toSmallestUnits(correctedRoundedFee.toString(), baseFeeId);
+    
+    // Update transaction size for return value
+    transactionSize = correctedTransactionSize;
+  }
+
+  // Apply overestimation to fee
+  if (overestimatePercent > 0) {
+    const overestimateMultiplier = new Decimal(100 + overestimatePercent).div(100);
+    const overestimatedFeeDecimal = toDecimal(transactionAmount).mul(overestimateMultiplier);
+    transactionAmount = overestimatedFeeDecimal.floor().toString();
+  }
+  
+  // Add gas fee if provided (only applicable for SmartContractExecuteTXN)
+  if (gasFeeInUsd !== undefined && gasFeeInUsd > 0) {
+    const gasFeeInSmallestUnits = calculateGasFee(gasFeeInUsd, baseFeeId, tokenInfoMap);
+    const baseFeeDecimal = toDecimal(transactionAmount);
+    const gasFeeDecimal = toDecimal(gasFeeInSmallestUnits);
+    const totalFeeDecimal = baseFeeDecimal.add(gasFeeDecimal);
+    transactionAmount = totalFeeDecimal.floor().toString();
+  }
+  
+  // Add base fee fields to base object (works for all transaction types)
+  const txnProto = protoObject as { base?: { feeAmount?: string; feeId?: string } };
+  if (txnProto.base) {
+    txnProto.base.feeAmount = transactionAmount;
+    txnProto.base.feeId = baseFeeId;
+  }
+}
+
+/**
+ * Universal Fee Calculator class
+ */
+export class UniversalFeeCalculator {
+  /**
+   * Unified fee calculation method
+   * Calculates network fees, contract fees, and interface fees
+   * Returns the modified proto object with all fee fields populated
+   * @param options - Fee calculation parameters
+   * @returns Modified proto object with fee fields
+   */
+  static async calculateFee<T extends TransactionMessage>(
+    options: FeeConfigHelper<T>
+  ): Promise<T> {
+    // Ensure base fee id default
+    const effectiveBaseFeeId = options.baseFeeId || '$ZRA+0000';
+
+    // Ensure tokenInfoMap includes base fee token info
+    const workingTokenInfoMap: Map<string, TokenInfo> = options.tokenInfoMap || new Map<string, TokenInfo>();
+    if (!workingTokenInfoMap.has(effectiveBaseFeeId)) {
+      try {
+        const response = await getTokenFeeInfo({
+          contractIds: [effectiveBaseFeeId],
+          includeRates: true,
+          includeContractFees: true
+        }, options.grpcConfig);
+        for (const token of response.tokens) {
+          workingTokenInfoMap.set(token.contractId, token);
+        }
+      } catch {
+        // If we cannot fetch, proceed; downstream will error with a precise message if needed
+      }
+    }
+
+    // Check if this is a CoinTXN transaction and contractFeeId is provided
+    const transactionType = extractTransactionTypeFromProtoObject(options.protoObject);
+
+    // STEP 1: Calculate contract fee FIRST (if applicable)
+    // Extract contractId from protoObject for CoinTXN (contractId in options is only for convenience)
+    const contractIdForFeeCheck = transactionType === TRANSACTION_TYPE.COIN_TYPE && isCoinTXN(options.protoObject)
+      ? options.protoObject.contractId
+      : options.contractId;
+    
+    if (transactionType === TRANSACTION_TYPE.COIN_TYPE && contractIdForFeeCheck && options.tokenInfoMap?.get(contractIdForFeeCheck)?.contractFees) {
+      try {
+        calculateContractFee(
+          options.protoObject,
+          options.contractFeeId,
+          options.contractFee,
+          options.tokenInfoMap,
+          options.overestimatePercent
+        );
+
+      } catch (error) {
+        throw new Error(`Contract fee calculation failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // STEP 2: Calculate interface fee (if specified)
+    if (options.interfaceFeeId && options.interfaceFee) {
+      try {
+        calculateInterfaceFee(
+          options.protoObject,
+          options.interfaceFee,
+          options.interfaceFeeId,
+          options.interfaceAddress,
+          options.tokenInfoMap
+        );
+      } catch (error) {
+        throw new Error(`Interface fee calculation failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    // STEP 3: Calculate network fee based on the proto object
+    calculateNetworkFee(
+      options.protoObject,
+      transactionType,
+      effectiveBaseFeeId,
+      options.baseFee,
+      workingTokenInfoMap,
+      options.overestimatePercent,
+      options.gasFeeInUsd
+    );
+
+    return options.protoObject;
+  }
+  
+  /**
+   * Get fee constants
+   */
+  static getFeeConstants() {
+    return getFeeConstants();
+  }
+  
+  /**
+   * Update fee constants
+   */
+  static updateFeeConstants(newConstants: Record<string, unknown>) {
+    updateFeeConstants(newConstants);
+  }
+
+  /**
+   * Get exchange rate for a given contract ID
+   */
+  static async getExchangeRate(contractId: string): Promise<Decimal> {
+    return ExchangeRateService.getExchangeRate(contractId);
+  }
+
+  /**
+   * Get comprehensive fee information for contracts
+   * 
+   * @param contractIds - Array of contract IDs to get fee info for
+   * @param options - Optional gRPC configuration
+   * @returns Promise with fee information including rates and contract details
+   */
+  static async getTokenFeeInfo(
+    contractIds: string[],
+    options: GRPCConfig = {}
+  ): Promise<{
+    contractId: string;
+    rate: Decimal;
+    authorized: boolean;
+    denomination: string;
+    contractFees?: {
+      fee: string;
+      feeAddress?: Uint8Array;
+      burn: string;
+      validator: string;
+    } | undefined;
+  }[]> {
+    const response = await getTokenFeeInfo({
+      contractIds,
+      includeRates: true,
+      includeContractFees: true
+    }, options);
+
+    // Transform the response to match the expected return type
+  
+    return response.tokens.map((token: { contractId: string; rate: string; authorized: boolean; denomination: string; contractFees?: ContractFees }) => ({
+      contractId: token.contractId,
+      rate: toDecimal(token.rate),
+      authorized: token.authorized,
+      denomination: token.denomination,
+      contractFees: token.contractFees ? {
+        fee: token.contractFees.fee,
+        ...(token.contractFees.feeAddress && { feeAddress: token.contractFees.feeAddress }),
+        burn: token.contractFees.burn,
+        validator: token.contractFees.validator
+      } : undefined
+    }));
+  }
+}
