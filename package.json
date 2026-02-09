@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "A ZERA Network JavaScript SDK",
   "main": "dist/index.cjs",
+  "react-native": "dist/index.cjs",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "type": "module",
