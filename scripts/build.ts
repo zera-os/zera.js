@@ -12,7 +12,7 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, rmSync, mkdirSync, cpSync } from 'fs';
+import { existsSync, rmSync, mkdirSync, cpSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -230,6 +230,33 @@ function generateESM(): void {
   }
 }
 
+function generateCJS(): void {
+  log('📦 Generating CJS bundle with esbuild...', colors.blue);
+
+  // Bundle everything inline for maximum compatibility across environments.
+  // React Native (Metro/Hermes) has issues with:
+  //   - ESM-only subpath exports (@noble/hashes/sha256)
+  //   - WHATWG ReadableStream polyfills (@connectrpc/connect)
+  //   - process.version access at module load time (readable-stream@2.x)
+  // A fully self-contained CJS bundle avoids all of these.
+  try {
+    exec(
+      'npx esbuild dist/index.js ' +
+      '--bundle ' +
+      '--format=cjs ' +
+      '--platform=node ' +
+      '--target=es2020 ' +
+      '--outfile=dist/index.cjs ' +
+      '--sourcemap ' +
+      '--banner:js="\'use strict\';"'
+    );
+    log('✅ CJS bundle generated', colors.green);
+  } catch (error) {
+    log('❌ CJS bundle generation failed!', colors.red);
+    throw error;
+  }
+}
+
 function buildProtobuf(): void {
   log('📋 Building protobuf files with TypeScript...', colors.blue);
   
@@ -238,12 +265,23 @@ function buildProtobuf(): void {
     exec('cd proto && npm run build:typescript');
     log('✅ Protobuf files built with TypeScript support', colors.green);
   } catch (error) {
+    // If generated files exist, we can proceed with a warning
+    const generatedPath = join(projectRoot, 'proto', 'generated');
+    if (existsSync(generatedPath) && existsSync(join(generatedPath, 'api_pb.js'))) {
+      log('⚠️  Protobuf build failed, but generated files exist. Skipping...', colors.yellow);
+      return;
+    }
+
     log('⚠️  Protobuf build failed, trying fallback...', colors.yellow);
     try {
       // Fallback to regular build
       exec('cd proto && npm run build');
       log('✅ Protobuf files built with fallback method', colors.green);
     } catch (fallbackError) {
+      if (existsSync(generatedPath) && existsSync(join(generatedPath, 'api_pb.js'))) {
+        log('⚠️  Fallback failed, but generated files exist. Skipping...', colors.yellow);
+        return;
+      }
       log('❌ Protobuf build failed completely', colors.red);
       throw fallbackError;
     }
@@ -311,7 +349,8 @@ function validateBuild(): void {
   const requiredFiles = [
     'index.js',
     'index.d.ts',
-    'index.mjs'
+    'index.mjs',
+    'index.cjs'
   ];
   
   for (const file of requiredFiles) {
@@ -324,11 +363,23 @@ function validateBuild(): void {
   log('✅ Build validation passed', colors.green);
 }
 
+function validateBundles(): void {
+  log('🔍 Validating CJS/ESM bundles...', colors.blue);
+  try {
+    exec('npx tsx scripts/validate-bundles.ts');
+    log('✅ Bundle validation passed', colors.green);
+  } catch (error) {
+    log('❌ Bundle validation failed!', colors.red);
+    throw error;
+  }
+}
+
 function showBuildInfo(): void {
   log('\n📊 Build Information:', colors.cyan);
   log(`  • Output directory: ${join(projectRoot, 'dist')}`, colors.reset);
-  log('  • Main entry: dist/index.js', colors.reset);
+  log('  • Main entry (CJS): dist/index.cjs', colors.reset);
   log('  • ESM entry: dist/index.mjs', colors.reset);
+  log('  • ESM (tsc): dist/index.js', colors.reset);
   log('  • Type definitions: dist/index.d.ts', colors.reset);
   log('  • Source maps: Generated', colors.reset);
   log('  • Declaration maps: Generated', colors.reset);
@@ -353,10 +404,12 @@ async function build(skipDependencyCheck: boolean = false): Promise<void> {
     typeCheck();
     compileTypeScript();
     generateESM();
+    generateCJS();
     copyProtoFiles();
     copyReadme();
     copyLicense();
     validateBuild();
+    validateBundles();
     
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(2);

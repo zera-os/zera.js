@@ -2,11 +2,12 @@
  * CoinTXN Examples — needsInitialization Override
  *
  * Demonstrates how to use the `needsInitialization` option in FeeConfig
- * to control the $0.20 per-address initialization fee for token transfers.
+ * to control the per-address initialization fee for token transfers.
  *
- * By default, the SDK calls getBalance() to check if the sender/recipients
- * already hold the transferred token. If they don't, $0.20 is added per address.
- * The `needsInitialization` flag lets you skip that API call.
+ * By default, the SDK calls getBalance() to check if the recipients
+ * already hold the transferred token. If they don't, the network-sourced
+ * new_wallet_fee is added per address. The `needsInitialization` flag
+ * lets you skip that API call.
  */
 
 import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
@@ -21,15 +22,15 @@ const grpcConfig = PROTONET_GRPC_CONFIG;
  * 
  * When `needsInitialization` is not set (undefined), the SDK calls getBalance()
  * for the sender and each recipient. If any address has a zero balance for the
- * token, $0.20 is added to the base fee per such address.
+ * token, the new_wallet_fee is added to the base fee per such address.
  */
-exampleAutoDetect() 
+exampleAutoDetect(); 
 async function exampleAutoDetect() {
   console.log('\n==== Auto-detect (default) ====');
 
   const txn = await createCoinTXN(
     [{ privateKey: ED25519_TEST_KEYS.alice.privateKey, publicKey: ED25519_TEST_KEYS.alice.publicKey, amount: '10' }],
-    [{ to: TEST_WALLET_ADDRESSES.bob, amount: '10' }],
+    [{ to: TEST_WALLET_ADDRESSES.alice, amount: '10' }],
     contractId,
     { baseFeeId: '$ZRA+0000' },          // needsInitialization is undefined — auto-detect via API
     '',
@@ -45,7 +46,7 @@ async function exampleAutoDetect() {
  * Example 2: Force initialization fee (needsInitialization = true)
  * 
  * When you KNOW the recipient doesn't have the token yet, set `needsInitialization: true`
- * to skip the balance check API call and always include the $0.20 fee.
+ * to skip the balance check API call and always include the initialization fee.
  * 
  * This saves a network round-trip and is useful when:
  * - You just created a new wallet and are sending its first tokens
@@ -61,7 +62,7 @@ async function exampleForceInitialization() {
     contractId,
     {
       baseFeeId: '$ZRA+0000',
-      needsInitialization: true           // Always add $0.20/address — no API call
+      needsInitialization: true           // Always add initialization fee per address — no API call
     },
     '',
     grpcConfig

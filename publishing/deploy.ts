@@ -296,6 +296,12 @@ function buildPackage() {
   logSuccess('Package build completed');
 }
 
+function validateBundles() {
+  logStep(3.5, 'Validating CJS/ESM bundles');
+  exec('npm run build:validate-bundles');
+  logSuccess('Bundle validation passed');
+}
+
 async function publishPackage() {
   logStep(4, 'Publishing to npm registry');
   try {
@@ -456,6 +462,7 @@ async function deploy(versionType?: 'patch' | 'minor' | 'major') {
     checkPrerequisites();
     runTests();
     buildPackage();
+    validateBundles();
     await publishPackage();
     verifyPublication();
     

@@ -1,8 +1,10 @@
 import type { PromiseClient } from '@connectrpc/connect';
 
 import { APIService } from '../../../proto/generated/api_connect.js';
-import type { TokenFeeInfoResponse, NonceResponse, BalanceResponse } from '../../../proto/generated/api_pb.js';
-import { NonceRequest, TokenFeeInfoRequest, BalanceRequest } from '../../../proto/generated/api_pb.js';
+import type { TokenFeeInfoResponse, NonceResponse, BalanceResponse, BaseFeeResponse } from '../../../proto/generated/api_pb.js';
+import { NonceRequest, TokenFeeInfoRequest, BalanceRequest, BaseFeeRequest } from '../../../proto/generated/api_pb.js';
+import type { PublicKey } from '../../../proto/generated/txn_pb.js';
+import { TRANSACTION_TYPE } from '../../../proto/generated/txn_pb.js';
 import { sanitizeAndDecodeAddress } from '../../shared/crypto/address-utils.js';
 import type { GRPCConfig } from '../../types/index.js';
 import { createClient } from '../client-factory.js';
@@ -25,6 +27,11 @@ export interface ValidatorAPIClient {
    * Get balance for an address and contract ID
    */
   getBalance(address: string, contractId: string): Promise<BalanceResponse>;
+
+  /**
+   * Get base fee info for a transaction type and public key
+   */
+  getBaseFee(publicKey: PublicKey | undefined, txnType: TRANSACTION_TYPE): Promise<BaseFeeResponse>;
 }
 
 /**
@@ -69,6 +76,17 @@ class ValidatorAPIClientImpl implements ValidatorAPIClient {
       encoded: false // Decode on local side for marginally faster processing
     });
     return this.client.balance(request);
+  }
+
+  /**
+   * Get base fee info for a transaction type and public key
+   */
+  async getBaseFee(publicKey: PublicKey | undefined, txnType: TRANSACTION_TYPE): Promise<BaseFeeResponse> {
+    const request = new BaseFeeRequest({
+      ...(publicKey ? { publicKey } : {}),
+      txnType: txnType
+    });
+    return this.client.baseFee(request);
   }
 }
 

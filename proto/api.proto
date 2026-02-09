@@ -162,6 +162,7 @@ message BaseFeeRequest{
 message BaseFeeResponse{
     string key_fee = 1;     //1000000000000000000 = $1.00 (1,000,000,000,000,000,000)
     string byte_fee = 2;    //1000000000000000000 = $1.00 (1,000,000,000,000,000,000)
+    string new_wallet_fee = 3; //1000000000000000000 = $1.00 (1,000,000,000,000,000,000)
 }
 
 
