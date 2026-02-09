@@ -3,6 +3,8 @@
  * Handles network fees (base fees), contract-specific fees, and interface fees with automatic or manual specification
  */
 
+import bs58 from 'bs58';
+
 import {
   CoinTXN,
   MintTXN,
@@ -30,12 +32,15 @@ import {
   CONTRACT_FEE_TYPE,
   ContractFees
 } from '../../../proto/generated/txn_pb.js';
+import type { PublicKey } from '../../../proto/generated/txn_pb.js';
 import { getTokenFeeInfo } from '../../api/handler/token-info/service.js';
+import { getBalance } from '../../api/validator/balance/service.js';
+import { getBaseFee } from '../../api/validator/base-fee/service.js';
 import type { 
   AmountInput,
   GRPCConfig
 } from '../../types/index.js';
-import { getHashTypesFromPublicKey, getKeyTypeFromPublicKey, getPublicKeyIdentifierFromBytes, sanitizeAndDecodeAddress } from '../crypto/address-utils.js';
+import { getKeyTypeFromPublicKey, getPublicKeyIdentifierFromBytes, sanitizeAndDecodeAddress } from '../crypto/address-utils.js';
 import { KEY_TYPE } from '../crypto/constants.js';
 import { logger } from '../monitoring/index.js';
 import { 
@@ -53,12 +58,7 @@ import {
   PROTOBUF_HASH_OVERHEAD,
   PROTOBUF_BASE_SIGNATURE_OVERHEAD,
   PROTOBUF_AUTH_SIGNATURE_OVERHEAD,
-  getFeeConstants,
-  updateFeeConstants,
-  getSignatureSize,
-  getPerByteFeeConstant,
-  getKeyFee,
-  getHashFee
+  getSignatureSize
 } from './base-fee-constants.js';
 import { getDenominationFallback, getDecimalPlacesFromDenomination } from './denomination-fallback.js';
 import { ExchangeRateService } from './exchange-rate-service.js';
@@ -157,6 +157,26 @@ export interface FeeConfig {
   gasFeeInUsd?: number;
   /** Optional gRPC configuration for network calls */
   grpcConfig?: GRPCConfig;
+  /**
+   * Override for the new token balance fee check (CoinTXN only).
+   * 
+   * By default (undefined), the SDK calls getBalance() to check if the recipients
+   * hold the transferred token and adds the network-sourced new_wallet_fee per address that doesn't.
+   * 
+   * - `true`  — Always add the fee per address (skip the API call). Useful when you
+   *             know the destination doesn't hold the token yet, or to avoid an extra network round-trip.
+   * - `false` — Never add the fee (skip the API call). Useful when you know all addresses
+   *             already hold the token.
+   * - `undefined` (default) — Auto-detect via getBalance() API call.
+   * 
+   * @example
+   * // Skip balance check, always add initialization fee
+   * feeConfig: { needsInitialization: true }
+   * 
+   * // Skip balance check, never add initialization fee  
+   * feeConfig: { needsInitialization: false }
+   */
+  needsInitialization?: boolean;
 }
 
 /**
@@ -298,85 +318,7 @@ function extractKeyTypesFromTransaction(protoObject: TransactionMessage): { keyT
   return { keyTypes, isRestricted };
 }
 
-/**
- * Extract hash types from a transaction protobuf object
- */
-function extractHashTypesFromTransaction(protoObject: TransactionMessage): string[] {
-  const hashTypes: string[] = [];
-  
-  try {
-    // Check if this is a CoinTXN (has auth field with publicKey array)
-    if (hasAuthProperty(protoObject) && 
-        typeof protoObject.auth === 'object' && 
-        protoObject.auth !== null &&
-        'publicKey' in protoObject.auth && 
-        Array.isArray((protoObject.auth as Record<string, unknown>).publicKey)) {
-      // CoinTXN: extract hash types from TransferAuthentication.publicKey array
-      const authObj = protoObject.auth as Record<string, unknown>;
-      for (const publicKey of authObj.publicKey as unknown[]) {
-        if (typeof publicKey === 'object' && publicKey !== null && 'single' in publicKey) {
-          const publicKeyObj = publicKey as Record<string, unknown>;
-          // Single key - convert bytes back to string identifier for hash type detection
-          let publicKeyString = getPublicKeyIdentifierFromBytes(publicKeyObj.single as Uint8Array);
-          
-          // Remove 'r_' prefix if present to get clean hash types
-          if (publicKeyString.startsWith('r_')) {
-            publicKeyString = publicKeyString.substring(2);
-          }
-          
-          try {
-            const keyHashTypes = getHashTypesFromPublicKey(publicKeyString);
-            hashTypes.push(...keyHashTypes);
-          } catch {
-            // If we can't extract hash types from this key, skip it
-          }
-        } else if (typeof publicKey === 'object' && publicKey !== null && 'multi' in publicKey) {
-          const publicKeyObj = publicKey as Record<string, unknown>;
-          if (publicKeyObj.multi && typeof publicKeyObj.multi === 'object' && publicKeyObj.multi !== null && 'publicKeys' in publicKeyObj.multi) {
-            throw new Error('multi signature wallet not currently supported in SDK');
-          }
-        }
-      }
-    } else if (hasBaseProperty(protoObject) && 
-               typeof protoObject.base === 'object' && 
-               protoObject.base !== null &&
-               'publicKey' in protoObject.base) {
-      // Non-CoinTXN: extract hash types from BaseTXN.public_key
-      const baseObj = protoObject.base as unknown as Record<string, unknown>;
-      const publicKey = baseObj.publicKey;
-      if (typeof publicKey === 'object' && publicKey !== null && 'single' in publicKey) {
-        const publicKeyObj = publicKey as Record<string, unknown>;
-        let publicKeyString = getPublicKeyIdentifierFromBytes(publicKeyObj.single as Uint8Array);
-        
-        // Remove 'r_' prefix if present to get clean hash types
-        if (publicKeyString.startsWith('r_')) {
-          publicKeyString = publicKeyString.substring(2);
-        }
-        
-        try {
-          const keyHashTypes = getHashTypesFromPublicKey(publicKeyString);
-          hashTypes.push(...keyHashTypes);
-        } catch {
-          // If we can't extract hash types from this key, skip it
-        }
-      } else if (typeof publicKey === 'object' && publicKey !== null && 'multi' in publicKey) {
-        const publicKeyObj = publicKey as Record<string, unknown>;
-        if (publicKeyObj.multi && typeof publicKeyObj.multi === 'object' && publicKeyObj.multi !== null && 'publicKeys' in publicKeyObj.multi) {
-          logger.warn('Multi-signature wallet not currently supported', {
-            operation: 'extractHashTypes',
-            walletType: 'multi-signature'
-          });
-          throw new Error('Multi-signature wallet not currently supported in SDK');
-        }
-      }
-    }
-  } catch (error) {
-    throw new Error(`Failed to extract hash types from transaction: ${error instanceof Error ? error.message : String(error)}`);
-  }
-  
-  // If no hash types found, return empty array (transaction might not have hash types)
-  return hashTypes;
-}
+
 
 /**
  * Calculate total transaction size from protobuf object + signatures + hashes
@@ -681,19 +623,59 @@ function calculateGasFee(
 }
 
 /**
- * Calculate network fee based on proto object
+ * Extract the first PublicKey protobuf object from a transaction.
+ * Used to pass the public key to the BaseFee API for accurate fee calculation.
+ */
+function extractPublicKeyFromTransaction(protoObject: TransactionMessage): PublicKey | undefined {
+  try {
+    // CoinTXN: public keys are in auth.publicKey[]
+    if (hasAuthProperty(protoObject) && 
+        typeof protoObject.auth === 'object' && 
+        protoObject.auth !== null &&
+        'publicKey' in protoObject.auth && 
+        Array.isArray((protoObject.auth as Record<string, unknown>).publicKey)) {
+      const authObj = protoObject.auth as Record<string, unknown>;
+      const publicKeys = authObj.publicKey as unknown[];
+      if (publicKeys.length > 0) {
+        return publicKeys[0] as PublicKey;
+      }
+    }
+    // Other transaction types: public key is in base.publicKey
+    else if (hasBaseProperty(protoObject) && 
+             typeof protoObject.base === 'object' && 
+             protoObject.base !== null &&
+             'publicKey' in protoObject.base) {
+      const baseObj = protoObject.base as unknown as Record<string, unknown>;
+      return baseObj.publicKey as PublicKey | undefined;
+    }
+  } catch {
+    // If extraction fails, return undefined (will use fallback constants)
+  }
+  return undefined;
+}
+
+/**
+ * Calculate network fee based on proto object.
+ * 
+ * Tries the BaseFee gRPC API first to get network-sourced key_fee and byte_fee.
+ * Falls back to hardcoded constants if the API call fails.
+ * 
+ * Returns the newWalletFee from the BaseFee API response (in 1e18 = $1.00 format)
+ * for use in new token balance fee calculation.
+ * 
  *! Note: This function may not be 100% accurate. Nominal testing indicates accuracy within >= 99.999999% (usually exact or 1 denomination unit greater). Minimal accuracy difference design choice for better code understandability rather than working strictly with scaled numbers.
  *! Note: Suggest 'maximum' overestimation to account for edge cases such as changes in ACE rates after transaction calculation.
  */
-function calculateNetworkFee(
+async function calculateNetworkFee(
   protoObject: TransactionMessage,
   transactionType: number,
   baseFeeId: string = '$ZRA+0000',
   baseFee: AmountInput | undefined,
   tokenInfoMap?: Map<string, TokenInfo>,
   overestimatePercent: number = 5.0,
-  gasFeeInUsd?: number
-): void {
+  gasFeeInUsd?: number,
+  grpcConfig?: GRPCConfig
+): Promise<string> {
   // Handle manual base fee - skip all calculation, validation, and overestimation
   if (baseFee !== undefined) {
     const baseFeeInSmallestUnits = toSmallestUnits(baseFee, baseFeeId, tokenInfoMap ? { tokenInfoMap } : {});
@@ -721,40 +703,33 @@ function calculateNetworkFee(
       txnProto.base.feeAmount = finalFee;
       txnProto.base.feeId = baseFeeId;
     }
-    return;
+    return '0';
   }
 
   // Calculate initial transaction size (with placeholder fee amount)
   let transactionSize = calculateTotalTransactionSize(protoObject);
   
-  // Get per-byte fee constant for this transaction type
-  const perByteFeeConstant = getPerByteFeeConstant(transactionType);
+  // Get fees from the BaseFee API (network-sourced, always up to date)
+  const publicKey = extractPublicKeyFromTransaction(protoObject);
+  const baseFeeResponse = await getBaseFee(
+    transactionType as TRANSACTION_TYPE,
+    publicKey ?? undefined,
+    grpcConfig
+  );
 
-  // Extract key types and restricted status from transaction
-  const { keyTypes, isRestricted } = extractKeyTypesFromTransaction(protoObject);
-  const hashTypes = extractHashTypesFromTransaction(protoObject);
+  // Capture the new wallet fee from the API response (1e18 = $1.00 format)
+  const newWalletFeeScaled = baseFeeResponse.newWalletFee || '0';
+  
+  // API returns fees in 1e18 = $1.00 format, convert to USD
+  // byte_fee is per-byte, key_fee is the total key+hash fee for this signer
+  const perByteFee = new Decimal(baseFeeResponse.byteFee || '0').div(new Decimal(10).pow(18));
+  const totalKeyAndHashFees = new Decimal(baseFeeResponse.keyFee || '0').div(new Decimal(10).pow(18));
 
   // Calculate initial base network fee: transaction size * per-byte fee
-  const baseNetworkFeeEquiv = toDecimal(transactionSize).mul(toDecimal(perByteFeeConstant));
-  
-  // Calculate key fees
-  let totalKeyFees = new Decimal(0);
-  for (const keyType of keyTypes) {
-    // Apply restricted multiplier if the public key starts with 'r_'
-    const keyFee = getKeyFee(keyType, isRestricted);
-    totalKeyFees = totalKeyFees.add(toDecimal(keyFee));
-  }
-  
-  // Calculate hash fees
-  let totalHashFees = new Decimal(0);
-  for (const hashType of hashTypes) {
-    // Apply restricted multiplier if the public key starts with 'r_'
-    const hashFee = getHashFee(hashType, isRestricted);
-    totalHashFees = totalHashFees.add(toDecimal(hashFee));
-  }
+  const baseNetworkFeeEquiv = toDecimal(transactionSize).mul(perByteFee);
   
   // Calculate initial total network fee: base fee + key fees + hash fees
-  const totalNetworkFeeScaled = baseNetworkFeeEquiv.add(totalKeyFees).add(totalHashFees).mul(1e18);
+  const totalNetworkFeeScaled = baseNetworkFeeEquiv.add(totalKeyAndHashFees).mul(1e18);
   
   // Get exchange rate for base fee
   const tokenInfo = tokenInfoMap?.get(baseFeeId);
@@ -805,10 +780,10 @@ function calculateNetworkFee(
     const correctedTransactionSize = transactionSize + feeSizeDifference;
     
     // Recalculate base network fee with corrected size
-    const correctedBaseNetworkFeeEquiv = toDecimal(correctedTransactionSize).mul(toDecimal(perByteFeeConstant));
+    const correctedBaseNetworkFeeEquiv = toDecimal(correctedTransactionSize).mul(perByteFee);
     
     // Recalculate total network fee
-    const correctedTotalNetworkFeeEquiv = correctedBaseNetworkFeeEquiv.add(totalKeyFees).add(totalHashFees).mul(1e18);
+    const correctedTotalNetworkFeeEquiv = correctedBaseNetworkFeeEquiv.add(totalKeyAndHashFees).mul(1e18);
     // Use precise division with proper rounding for base fees
     const correctedTotalNetworkFee = correctedTotalNetworkFeeEquiv.div(exchangeRate);
     
@@ -844,6 +819,145 @@ function calculateNetworkFee(
   if (txnProto.base) {
     txnProto.base.feeAmount = transactionAmount;
     txnProto.base.feeId = baseFeeId;
+  }
+
+  return newWalletFeeScaled;
+}
+
+/**
+ * Calculate additional network fee for addresses that don't hold the transferred token.
+ * 
+ * For CoinTXN (token transfers), the network charges an additional fee when a recipient
+ * address doesn't currently have that token. This function checks all destination
+ * addresses, adding the network-sourced new wallet fee per recipient without a balance.
+ * 
+ * @note The sender is NOT checked — only output (recipient) addresses are relevant.
+ * 
+ * @param protoObject - The CoinTXN protobuf object (must have outputTransfers)
+ * @param baseFeeId - The base fee instrument ID (e.g., '$ZRA+0000')
+ * @param contractId - The contract ID of the token being transferred
+ * @param tokenInfoMap - Map of token info including exchange rates
+ * @param newWalletFeeScaled - The new wallet fee from BaseFee API in 1e18 = $1.00 format
+ * @param grpcConfig - gRPC configuration for balance lookups
+ * @param needsInitialization - Optional override: true = always add fee, false = never add fee, undefined = auto-detect
+ */
+async function calculateNewTokenBalanceFee(
+  protoObject: TransactionMessage,
+  baseFeeId: string,
+  contractId: string,
+  tokenInfoMap: Map<string, TokenInfo>,
+  newWalletFeeScaled: string,
+  grpcConfig?: GRPCConfig,
+  needsInitialization?: boolean
+): Promise<void> {
+  if (!isCoinTXN(protoObject)) return;
+
+  const coinTxn = protoObject as CoinTXN;
+  const addressesToCheck: string[] = [];
+
+  // 1. Extract destination addresses from outputTransfers (stored as base58-decoded Uint8Array)
+  if (coinTxn.outputTransfers && coinTxn.outputTransfers.length > 0) {
+    for (const output of coinTxn.outputTransfers) {
+      if (output.walletAddress && output.walletAddress.length > 0) {
+        try {
+          const addressString = bs58.encode(output.walletAddress);
+          if (addressString && !addressesToCheck.includes(addressString)) {
+            addressesToCheck.push(addressString);
+          }
+        } catch {
+          // Skip addresses that can't be decoded — shouldn't happen with valid transactions
+        }
+      }
+    }
+  }
+
+  if (addressesToCheck.length === 0) return;
+
+  // 3. Determine how many addresses don't hold the token
+  let addressesWithoutBalance = 0;
+
+  if (needsInitialization === true) {
+    // Override: user says all addresses need initialization — skip API calls entirely
+    addressesWithoutBalance = addressesToCheck.length;
+    logger.info('needsInitialization=true override: treating all addresses as needing initialization', {
+      addressCount: addressesToCheck.length,
+      operation: 'calculateNewTokenBalanceFee'
+    });
+  } else if (needsInitialization === false) {
+    // Override: user says no addresses need initialization — skip API calls entirely
+    logger.info('needsInitialization=false override: skipping new token balance fee', {
+      operation: 'calculateNewTokenBalanceFee'
+    });
+    return;
+  } else {
+    // Default: check balance for each address via API
+    for (const address of addressesToCheck) {
+      try {
+        const balanceResponse = await getBalance(address, contractId, grpcConfig || {});
+        // The validator returns balance: '0' when the wallet doesn't have that token
+        if (balanceResponse.balance === '0') {
+          addressesWithoutBalance++;
+        }
+      } catch {
+        // If we can't check balance, assume the address doesn't have it (safer to overestimate)
+        addressesWithoutBalance++;
+        logger.warn('Failed to check balance for new token fee estimation, assuming address does not hold token', {
+          address,
+          contractId,
+          operation: 'calculateNewTokenBalanceFee'
+        });
+      }
+    }
+  }
+
+  if (addressesWithoutBalance === 0) return;
+
+  // 4. Calculate new wallet fee per address in the base fee token's smallest units
+  // newWalletFeeScaled is in 1e18 = $1.00 format from the BaseFee API
+  const feePerAddressScaled = new Decimal(newWalletFeeScaled);
+  const totalFeeScaled = feePerAddressScaled.mul(addressesWithoutBalance);
+
+  // Convert USD to base fee token smallest units using exchange rate
+  const tokenInfo = tokenInfoMap.get(baseFeeId);
+  if (!tokenInfo?.rate) {
+    logger.warn('Cannot calculate new token balance fee: missing exchange rate for base fee token', {
+      baseFeeId,
+      operation: 'calculateNewTokenBalanceFee'
+    });
+    return;
+  }
+
+  const exchangeRate = toDecimal(tokenInfo.rate);
+  // totalFeeScaled is already in 1e18 precision (from the BaseFee API)
+  const feeInTokenUnits = totalFeeScaled.div(exchangeRate);
+
+  // Get denomination decimals
+  let decimals: number;
+  if (tokenInfo.denomination) {
+    decimals = getDecimalPlacesFromDenomination(tokenInfo.denomination);
+  } else {
+    throw new Error(`Token info missing denomination for ${baseFeeId}`);
+  }
+
+  // Convert to smallest units
+  const precisionMultiplier = new Decimal(10).pow(decimals);
+  const feeInSmallestUnits = feeInTokenUnits.mul(precisionMultiplier).floor();
+
+  // 5. Add the fee to the existing base fee
+  const txnProto = protoObject as { base?: { feeAmount?: string; feeId?: string } };
+  if (txnProto.base?.feeAmount) {
+    const currentFee = toDecimal(txnProto.base.feeAmount);
+    const newFee = currentFee.add(feeInSmallestUnits);
+    txnProto.base.feeAmount = newFee.floor().toString();
+
+    logger.info('Added new token balance fee to base fee', {
+      addressesChecked: addressesToCheck.length,
+      addressesWithoutBalance,
+      feePerAddressScaled: feePerAddressScaled.toString(),
+      totalAdditionalFeeSmallestUnits: feeInSmallestUnits.toString(),
+      newTotalBaseFee: txnProto.base.feeAmount,
+      operation: 'calculateNewTokenBalanceFee'
+    });
   }
 }
 
@@ -920,33 +1034,51 @@ export class UniversalFeeCalculator {
       }
     }
 
-    // STEP 3: Calculate network fee based on the proto object
-    calculateNetworkFee(
+    // STEP 3: Calculate network fee based on the proto object (uses BaseFee API)
+    // Returns the newWalletFee from the API response for use in Step 4
+    const newWalletFeeScaled = await calculateNetworkFee(
       options.protoObject,
       transactionType,
       effectiveBaseFeeId,
       options.baseFee,
       workingTokenInfoMap,
       options.overestimatePercent,
-      options.gasFeeInUsd
+      options.gasFeeInUsd,
+      options.grpcConfig
     );
+
+    // STEP 4: Add new token balance fee for CoinTXN (only for auto-calculated base fees)
+    // Checks if any destination address doesn't hold the transferred token,
+    // and adds the network-sourced new_wallet_fee per such address to the base network fee.
+    if (transactionType === TRANSACTION_TYPE.COIN_TYPE && options.baseFee === undefined) {
+      const coinContractId = isCoinTXN(options.protoObject) ? options.protoObject.contractId : undefined;
+      if (coinContractId) {
+        try {
+          await calculateNewTokenBalanceFee(
+            options.protoObject,
+            effectiveBaseFeeId,
+            coinContractId,
+            workingTokenInfoMap,
+            newWalletFeeScaled,
+            options.grpcConfig,
+            options.needsInitialization
+          );
+        } catch (error) {
+          // Non-fatal: if balance check fails, proceed without the additional fee.
+          // The network will reject the transaction if fees are insufficient,
+          // but we don't want to block transaction creation due to balance lookup failures.
+          logger.warn('New token balance fee check failed, proceeding without additional fee', {
+            error: error instanceof Error ? error.message : String(error),
+            operation: 'calculateFee'
+          });
+        }
+      }
+    }
 
     return options.protoObject;
   }
   
-  /**
-   * Get fee constants
-   */
-  static getFeeConstants() {
-    return getFeeConstants();
-  }
-  
-  /**
-   * Update fee constants
-   */
-  static updateFeeConstants(newConstants: Record<string, unknown>) {
-    updateFeeConstants(newConstants);
-  }
+
 
   /**
    * Get exchange rate for a given contract ID

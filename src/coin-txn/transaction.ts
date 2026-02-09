@@ -363,11 +363,13 @@ function createBaseTransaction(baseFeeId: string = '$ZRA+0000', baseFee: AmountI
 async function calculateTransactionFees(
   coinTxn: CoinTXN,
   feeConfig: FeeConfig,
-  tokenInfoMap: Map<string, TokenInfo>
+  tokenInfoMap: Map<string, TokenInfo>,
+  grpcConfig?: GRPCConfig
 ): Promise<CoinTXN> {
   try {
     const feeConfigHelper: FeeConfigHelper<CoinTXN> = {
       ...feeConfig,
+      ...(grpcConfig && !feeConfig.grpcConfig ? { grpcConfig } : {}),
       contractId: coinTxn.contractId,
       protoObject: coinTxn,
       tokenInfoMap
@@ -527,7 +529,7 @@ export async function createCoinTXN(
 
   // Calculate fees
   let coinTxn = new CoinTXN(initialCoinTxnData);
-  coinTxn = await calculateTransactionFees(coinTxn, feeConfig, tokenInfoMap);
+  coinTxn = await calculateTransactionFees(coinTxn, feeConfig, tokenInfoMap, grpcConfig);
   
   // Sanitize transaction
   coinTxn = sanitizeTransaction(coinTxn);
