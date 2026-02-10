@@ -1,8 +1,8 @@
 
 import bs58 from 'bs58';
 
-import { TRANSACTION_TYPE, PublicKey, BaseFeeRequest } from '../proto/generated/api_pb.js'; // Use api_pb for Request/Response
-import { CoinTXN, BaseTXN } from '../proto/generated/txn_pb.js';
+import { BaseFeeRequest } from '../proto/generated/api_pb.js'; // Use api_pb for Request/Response
+import { TRANSACTION_TYPE, PublicKey, CoinTXN, BaseTXN } from '../proto/generated/txn_pb.js';
 import { getBaseFee } from '../src/api/validator/base-fee/service.js';
 import { createCoinTXN } from '../src/coin-txn/transaction.js';
 import { UniversalFeeCalculator } from '../src/shared/fee-calculators/universal-fee-calculator.js';
@@ -20,7 +20,7 @@ async function check() {
     // 1. Check what the API actually returns (still expected to be empty/zero for newWalletFee)
     const pubKeyString = ED25519_TEST_KEYS.alice.publicKey;
     const base58Key = pubKeyString.startsWith('A_') ? pubKeyString.slice(2) : pubKeyString;
-    const pubKeyBytes = bs58.decode(base58Key);
+    const pubKeyBytes = new Uint8Array(bs58.decode(base58Key));
     const pk = new PublicKey({ single: pubKeyBytes });
 
     console.log('Fetching live BaseFee...');
