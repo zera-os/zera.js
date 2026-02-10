@@ -130,8 +130,9 @@ export class WalletFactory {
     // Use provided mnemonic
     const finalMnemonic = mnemonic;
     
-    // Generate seed from mnemonic
-    const seed = generateSeed(finalMnemonic, passphrase);
+    // Use pre-computed seed if provided (e.g., from native PBKDF2),
+    // otherwise derive it synchronously via bip39's mnemonicToSeedSync.
+    const seed = options.seed ?? generateSeed(finalMnemonic, passphrase);
     
     // Build derivation path (SLIP-0010 for Ed25519/Ed448)
     const derivationPath = buildDerivationPath(hdOptions);

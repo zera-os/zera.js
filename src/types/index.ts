@@ -198,6 +198,12 @@ export interface WalletOptions {
   passphrase?: string;
   /** HD wallet derivation options */
   hdOptions?: HDOptions;
+  /**
+   * Optional pre-computed seed (64 bytes). When provided, skips the internal
+   * mnemonicToSeedSync PBKDF2 derivation. This allows callers (e.g., React Native)
+   * to provide a seed derived via native crypto without blocking the JS thread.
+   */
+  seed?: Uint8Array;
 }
 
 /**
