@@ -89,7 +89,7 @@ export function generateZeraPublicKeyIdentifier(
 
   // Get hash type prefixes (sorted for consistency)
   const sortedHashTypes = [...hashTypes].sort();
-  const hashPrefixes = sortedHashTypes.map(hashType => HASH_TYPE_PREFIXES[hashType]).join('');
+  const hashPrefixes = sortedHashTypes.map(hashType => HASH_TYPE_PREFIXES[hashType]).join('_');
   
   // Combine all parts: KeyPrefix_HashPrefixes_PublicKeyBase58
   return `${keyPrefix}_${hashPrefixes}_${publicKeyBase58}`;
