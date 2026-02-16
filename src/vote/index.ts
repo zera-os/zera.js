@@ -2,6 +2,10 @@
  * VoteTXN Module - Main Entry Point
  */
 
-export { createVoteTXN, sendVoteTXN, type CreateVoteTXNOptions } from './transaction.js';
-
-
+export {
+  createVoteTXN,
+  buildVoteTXN,
+  sendVoteTXN,
+  type CreateVoteTXNOptions,
+  type BuildVoteTXNOptions
+} from './transaction.js';

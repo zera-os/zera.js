@@ -74,7 +74,7 @@ export {
 export {
   bridgeZeraToSol,
   bridgeZeraToSolAndSend,
-  type BridgeZeraToSolOptions
+  type BridgeZeraOptions
 } from './src/smart-contracts/use-cases/bridge/zera/index.js';
 
 // Import Solana Bridge functionality (instruction builders)
@@ -100,17 +100,32 @@ export {
   type UpdateContractOptions
 } from './src/contract/index.js';
 
-// Import Adapter functionality (external signing support)
+// Import Sign module (universal signing)
 export {
   type ZeraSigner,
   KeyPairSigner,
-  buildUnsignedCoinTXN,
-  signCoinTXN,
   signAndFinalize,
+  signWithKey,
+  signCoinTXN,
+  signCoinTXNWithKeys,
+  type CoinTXNKeyPair
+} from './src/sign/index.js';
+
+// Import Adapter functionality (builders + serialization)
+export {
+  buildCoinTXN,
+  buildVoteTXN,
+  buildContractTXN,
+  buildContractUpdateTXN,
+  buildSmartContractExecuteTXN,
   serializeTransaction,
   deserializeTransaction,
   getRegisteredTypes,
-  type UnsignedCoinTXNInput,
+  type CoinTXNBuildInput,
+  type BuildVoteTXNOptions,
+  type BuildContractOptions,
+  type BuildContractUpdateOptions,
+  type BuildSmartContractExecuteOptions,
   type SerializedTransaction
 } from './src/adapter/index.js';
 
@@ -155,10 +170,6 @@ export {
   validateAmount,
   validateBase58Address
 } from './src/shared/utils/validation.js';
-
-
-
-
 
 // Import error classes
 export {

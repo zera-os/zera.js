@@ -66,7 +66,6 @@ export {
 
 export type {
   BridgeZeraOptions,
-  BridgeZeraToSolOptions,
   BurnSolOptions,
   ReleaseZeraOptions,
   MintSolOptions,

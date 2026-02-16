@@ -1,10 +1,10 @@
 /**
- * Wallet Adapter - Signer Abstractions
+ * ZERA Transaction Signing — Signer Abstractions
  *
  * Defines the `ZeraSigner` interface for decoupled transaction signing,
  * and a built-in `KeyPairSigner` implementation for direct private-key usage.
  *
- * @module adapter/signer
+ * @module sign/signer
  *
  * @example
  * ```typescript

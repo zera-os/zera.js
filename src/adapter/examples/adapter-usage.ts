@@ -1,6 +1,10 @@
 /**
- * Wallet Adapter - Usage Examples
+ * Adapter Usage Examples — CoinTXN
  *
+ * See also:
+ *   - vote-adapter-usage.ts      (GovernanceVote)
+ *   - contract-adapter-usage.ts  (Contract create/update)
+ *   - smart-contract-adapter-usage.ts (Smart contract execute)
  * Demonstrates the complete adapter workflow:
  * 1. Building unsigned transactions
  * 2. Serializing for transport
@@ -11,14 +15,14 @@
  */
 
 import {
-  buildUnsignedCoinTXN,
+  buildCoinTXN,
   signCoinTXN,
   signAndFinalize,
   KeyPairSigner,
   serializeTransaction,
   deserializeTransaction,
   type ZeraSigner,
-  type UnsignedCoinTXNInput
+  type CoinTXNBuildInput
 } from '../index.js';
 import { sendCoinTXN } from '../../coin-txn/transaction.js';
 
@@ -38,7 +42,7 @@ async function exampleBasicFlow(): Promise<void> {
   const privateKey = 'YOUR_PRIVATE_KEY_BASE58';
 
   // Step 1: Build the unsigned transaction (no private key needed!)
-  const inputs: UnsignedCoinTXNInput[] = [{
+  const inputs: CoinTXNBuildInput[] = [{
     publicKey,
     amount: '10.5',
     feePercent: '100'
@@ -49,7 +53,7 @@ async function exampleBasicFlow(): Promise<void> {
     amount: '10.0'
   }];
 
-  const unsigned = await buildUnsignedCoinTXN(
+  const unsigned = await buildCoinTXN(
     inputs,
     outputs,
     '$ZRA+0000'
@@ -82,7 +86,7 @@ async function exampleSerializationFlow(): Promise<void> {
 
   // ---- dApp side ----
 
-  const inputs: UnsignedCoinTXNInput[] = [{
+  const inputs: CoinTXNBuildInput[] = [{
     publicKey: 'ed25519:DAPP_USER_PUBLIC_KEY',
     amount: '5.0',
     feePercent: '100'
@@ -93,7 +97,7 @@ async function exampleSerializationFlow(): Promise<void> {
     amount: '4.5'
   }];
 
-  const unsigned = await buildUnsignedCoinTXN(inputs, outputs, '$ZRA+0000');
+  const unsigned = await buildCoinTXN(inputs, outputs, '$ZRA+0000');
 
   // Serialize to a portable string
   const envelope = serializeTransaction(unsigned);
@@ -156,7 +160,7 @@ async function exampleCustomSigner(): Promise<void> {
     }
   };
 
-  const inputs: UnsignedCoinTXNInput[] = [{
+  const inputs: CoinTXNBuildInput[] = [{
     publicKey: browserWalletSigner.publicKey,
     amount: '1.0',
     feePercent: '100'
@@ -167,7 +171,7 @@ async function exampleCustomSigner(): Promise<void> {
     amount: '0.5'
   }];
 
-  const unsigned = await buildUnsignedCoinTXN(inputs, outputs, '$ZRA+0000');
+  const unsigned = await buildCoinTXN(inputs, outputs, '$ZRA+0000');
   const signed = await signCoinTXN(unsigned, [browserWalletSigner]);
 
   console.log('✅ Transaction signed by browser wallet');
@@ -184,7 +188,7 @@ async function exampleCustomSigner(): Promise<void> {
 async function exampleMultiSigner(): Promise<void> {
   console.log('\n=== Example 4: Multi-Signer ===\n');
 
-  const inputs: UnsignedCoinTXNInput[] = [
+  const inputs: CoinTXNBuildInput[] = [
     {
       publicKey: 'ed25519:ALICE_PUBLIC_KEY',
       amount: '5.0',
@@ -202,7 +206,7 @@ async function exampleMultiSigner(): Promise<void> {
     amount: '10.0'
   }];
 
-  const unsigned = await buildUnsignedCoinTXN(inputs, outputs, '$ZRA+0000');
+  const unsigned = await buildCoinTXN(inputs, outputs, '$ZRA+0000');
 
   // Each signer signs independently
   const aliceSigner = new KeyPairSigner('ed25519:ALICE_PUBLIC_KEY', 'ALICE_PRIVATE_KEY');

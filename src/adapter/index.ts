@@ -1,32 +1,23 @@
 /**
  * Wallet Adapter Module
  *
- * Provides abstractions for decoupled transaction signing, enabling
- * external wallets (browser extensions, hardware wallets, mobile apps)
- * to sign ZERA transactions without direct access to private keys.
+ * Re-exports all transaction builders and signing tools from their canonical
+ * module folders, plus serialization. The adapter is a convenient single
+ * import point for external wallets and dApps.
  *
  * @module adapter
- *
- * ## Key Concepts
- *
- * - **`ZeraSigner`** — interface for anything that can sign bytes
- * - **`KeyPairSigner`** — built-in signer for local private keys
- * - **`buildUnsignedCoinTXN()`** — build a CoinTXN without signing
- * - **`signCoinTXN()`** — sign a CoinTXN with one or more signers
- * - **`signAndFinalize()`** — sign any standard transaction with a signer
- * - **`serializeTransaction()`** / **`deserializeTransaction()`** — portable encoding
  *
  * @example
  * ```typescript
  * import {
- *   buildUnsignedCoinTXN,
+ *   buildCoinTXN,
  *   signCoinTXN,
  *   sendCoinTXN,
  *   KeyPairSigner
  * } from '@zera-os/zera.js';
  *
  * // Build → Sign → Send
- * const unsigned = await buildUnsignedCoinTXN(inputs, outputs, '$ZRA+0000');
+ * const unsigned = await buildCoinTXN(inputs, outputs, '$ZRA+0000');
  * const signer = new KeyPairSigner(publicKey, privateKey);
  * const signed = await signCoinTXN(unsigned, [signer]);
  * const hash = await sendCoinTXN(signed);
@@ -34,24 +25,39 @@
  */
 
 // ============================================================================
-// SIGNER
+// SIGNING (canonical home: src/sign/)
 // ============================================================================
 
 export {
   type ZeraSigner,
-  KeyPairSigner
-} from './signer.js';
-
-// ============================================================================
-// TRANSACTION BUILDERS & SIGNING
-// ============================================================================
-
-export {
-  buildUnsignedCoinTXN,
-  signCoinTXN,
+  KeyPairSigner,
   signAndFinalize,
-  type UnsignedCoinTXNInput
-} from './transaction.js';
+  signWithKey,
+  signCoinTXN,
+  signCoinTXNWithKeys,
+  type CoinTXNKeyPair
+} from '../sign/index.js';
+
+// ============================================================================
+// TRANSACTION BUILDERS (canonical homes in module folders)
+// ============================================================================
+
+// CoinTXN
+export { buildCoinTXN, type CoinTXNBuildInput } from '../coin-txn/transaction.js';
+
+// GovernanceVote
+export { buildVoteTXN, type BuildVoteTXNOptions } from '../vote/transaction.js';
+
+// Contract Create & Update
+export { buildContractTXN, type BuildContractOptions } from '../contract/create/transaction.js';
+export { buildContractUpdateTXN, type BuildContractUpdateOptions } from '../contract/update/transaction.js';
+
+// Smart Contract Execute
+export { buildSmartContractExecuteTXN, type BuildSmartContractExecuteOptions } from '../smart-contracts/execute/transaction.js';
+
+// Re-export types needed for building transactions
+export type { ExecuteParameter, ParameterType } from '../smart-contracts/execute/transaction.js';
+export type { CreateContractOptions, UpdateContractOptions } from '../contract/shared/types.js';
 
 // ============================================================================
 // SERIALIZATION

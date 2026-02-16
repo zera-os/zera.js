@@ -25,16 +25,6 @@ export interface BridgeZeraOptions extends Omit<CreateSmartContractExecuteOption
   feeAmountUsd?: string;
 }
 
-// ============================================================================
-// LOCK OPTIONS (ZERA → Solana)
-// ============================================================================
-
-/**
- * Options for lockZera (lock ZERA tokens to bridge to Solana)
- * @deprecated Use BridgeZeraOptions instead
- */
-export type BridgeZeraToSolOptions = BridgeZeraOptions;
-
 /**
  * Options for burning wrapped SOL tokens on ZERA
  */
