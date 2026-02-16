@@ -6,6 +6,24 @@ JavaScript SDK for the ZERA Network.
 
 `zera.js` provides everything you need to build on ZERA — wallet creation, transactions, smart contracts, DEX operations, cross-chain bridging, and governance voting. Written in TypeScript with full type safety.
 
+---
+
+### 🌍 Built by the Community, for the Community
+
+**ZERA Open Source (ZERA-OS) isn't run by a company — it's run by you.**
+
+Every line of code in this repo comes from community members like you. There is no inner circle. No gatekeeping. If you can write code, review a PR, file an issue, or share an idea — you already belong here.
+
+- **Pull the repo** — explore, experiment, build on top of it
+- **Submit a PR** — every contribution matters, from typos to new modules
+- **Become a maintainer** — consistent contributors are invited to be maintainers.
+
+ZERA-OS isn't governed by a board, bound by a foundation, or even bound by ZERA's Governance. There's no roadmap handed down from above — just developers building what they want to build and sharing it with the world. This is open source — no strings attached.
+
+> **The more builders there are, the stronger this tooling becomes. Start anywhere. Start today.**
+
+---
+
 ## Installation
 
 ```bash
