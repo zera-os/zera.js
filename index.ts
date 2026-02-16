@@ -100,6 +100,20 @@ export {
   type UpdateContractOptions
 } from './src/contract/index.js';
 
+// Import Adapter functionality (external signing support)
+export {
+  type ZeraSigner,
+  KeyPairSigner,
+  buildUnsignedCoinTXN,
+  signCoinTXN,
+  signAndFinalize,
+  serializeTransaction,
+  deserializeTransaction,
+  getRegisteredTypes,
+  type UnsignedCoinTXNInput,
+  type SerializedTransaction
+} from './src/adapter/index.js';
+
 // Import API services
 export {
   getNonce,
