@@ -83,6 +83,9 @@ export * as solanaBridge from './src/smart-contracts/use-cases/bridge/solana/ind
 // Import Guardian Bridge functionality (admin operations)
 export * as guardianBridge from './src/smart-contracts/use-cases/bridge/guardian/index.js';
 
+// Import Staking functionality
+export * as staking from './src/smart-contracts/use-cases/staking/index.js';
+
 // Import Vote functionality
 export {
   createVoteTXN,
