@@ -5,15 +5,15 @@
  * via the adapter module.
  */
 
+import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { sendSmartContractExecuteTXN } from '../../smart-contracts/execute/index.js';
+import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
 import {
   buildSmartContractExecuteTXN,
   signAndFinalize,
   KeyPairSigner,
   type ExecuteParameter
 } from '../index.js';
-import { sendSmartContractExecuteTXN } from '../../smart-contracts/execute/index.js';
-import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 
 // ============================================================================
 // Example 1: Execute a smart contract function

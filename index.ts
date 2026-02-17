@@ -121,12 +121,20 @@ export {
   serializeTransaction,
   deserializeTransaction,
   getRegisteredTypes,
+  ZeraWalletAdapter,
+  WalletSigner,
+  DeepLinkSigner,
   type CoinTXNBuildInput,
   type BuildVoteTXNOptions,
   type BuildContractOptions,
   type BuildContractUpdateOptions,
   type BuildSmartContractExecuteOptions,
-  type SerializedTransaction
+  type SerializedTransaction,
+  type WalletAdapterConfig,
+  type WalletAdapterEvent,
+  type WalletAdapterState,
+  type WalletConnectionMode,
+  type ZeraProvider
 } from './src/adapter/index.js';
 
 // Import API services

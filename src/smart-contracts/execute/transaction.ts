@@ -12,12 +12,12 @@ import { protoInt64 } from '@bufbuild/protobuf';
 import { SmartContractExecuteTXN, Parameters } from '../../../proto/generated/txn_pb.js';
 import { validateKeyPair } from '../../contract/shared/utils.js';
 import { createTransactionClient } from '../../grpc/transaction/transaction-client.js';
-import { signWithKey } from '../../sign/finalize.js';
+import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
 import { UniversalFeeCalculator, type FeeConfigHelper } from '../../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../../shared/monitoring/index.js';
-import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
 import { buildStandardBaseTXN, getAddressAndNonce } from '../../shared/tx/base.js';
 import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { signWithKey } from '../../sign/finalize.js';
 import type { GRPCConfig } from '../../types/index.js';
 
 // ============================================================================

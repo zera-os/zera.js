@@ -46,7 +46,7 @@ export {
 export { buildCoinTXN, type CoinTXNBuildInput } from '../coin-txn/transaction.js';
 
 // GovernanceVote
-export { buildVoteTXN, type BuildVoteTXNOptions } from '../vote/transaction.js';
+export { buildVoteTXN, sendVoteTXN, type BuildVoteTXNOptions } from '../vote/transaction.js';
 
 // Contract Create & Update
 export { buildContractTXN, type BuildContractOptions } from '../contract/create/transaction.js';
@@ -69,3 +69,78 @@ export {
   getRegisteredTypes,
   type SerializedTransaction
 } from './serialization.js';
+
+// ============================================================================
+// WALLET ADAPTER (browser wallet connection + signing)
+// ============================================================================
+
+export {
+  ZeraWalletAdapter,
+  type WalletAdapterConfig,
+  type WalletAdapterEvent,
+  type WalletAdapterState,
+  type WalletConnectionMode
+} from './wallet-adapter.js';
+
+export {
+  WalletSigner,
+  DeepLinkSigner,
+  type ZeraProvider
+} from './wallet-signer.js';
+
+// ============================================================================
+// MOBILE WALLET ADAPTER (MWA) — Android wallet discovery + sessions
+// ============================================================================
+
+export {
+  ZeraMwaClient,
+  type ZeraMwaClientOptions,
+  type MwaEventType
+} from '../mwa/index.js';
+
+export type {
+  MwaAppIdentity,
+  MwaAuthorizeResponse,
+  MwaSignTransactionResponse,
+  MwaSignMessageResponse,
+  MwaSessionState,
+  MwaSessionInfo
+} from '../mwa/index.js';
+
+export {
+  ZERA_MWA_VERSION,
+  ZERA_MWA_SCHEME,
+  MWA_METHODS
+} from '../mwa/index.js';
+
+// ============================================================================
+// WALLETCONNECT v2 — namespace definitions + signer
+// ============================================================================
+
+export {
+  // ZERA namespace
+  ZERA_WC_NAMESPACE,
+  ZERA_WC_CHAINS,
+  ZERA_WC_METHODS,
+  ZERA_WC_EVENTS,
+  ZERA_WC_REQUIRED_NAMESPACES,
+  // Solana namespace
+  SOLANA_WC_NAMESPACE,
+  SOLANA_WC_CHAINS,
+  SOLANA_WC_METHODS,
+  SOLANA_WC_EVENTS,
+  SOLANA_WC_REQUIRED_NAMESPACES,
+  // Combined
+  ALL_WC_REQUIRED_NAMESPACES,
+  // Signer
+  WalletConnectSigner,
+} from './walletconnect.js';
+
+export type {
+  WCSignClient,
+  WCSession,
+  ZeraWCSignTransactionResult,
+  ZeraWCSignMessageResult,
+  ZeraWCGetAccountsResult,
+} from './walletconnect.js';
+

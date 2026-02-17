@@ -30,6 +30,7 @@ import {
   PublicKey
 } from '../../proto/generated/txn_pb.js';
 import { getNonces } from '../api/handler/nonce/service.js';
+import { createTransactionClient } from '../grpc/transaction/transaction-client.js';
 import { getPublicKeyBytes, generateAddressFromPublicKey, sanitizeAndDecodeAddress } from '../shared/crypto/address-utils.js';
 import { createTransactionHash } from '../shared/crypto/signature-utils.js';
 import { UniversalFeeCalculator, type FeeConfig, type FeeConfigHelper } from '../shared/fee-calculators/universal-fee-calculator.js';
@@ -40,9 +41,7 @@ import { MAINNET_GRPC_CONFIG } from '../shared/utils/testing-defaults/index.js';
 import { getTokenInfo, type TokenInfo } from '../shared/utils/token-info.js';
 import { toSmallestUnits } from '../shared/utils/unified-amount-conversion.js';
 import { isValidContractId } from '../shared/utils/validation.js';
-import { createTransactionClient } from '../grpc/transaction/transaction-client.js';
 import { signCoinTXNWithKeys } from '../sign/finalize.js';
-
 import type {
   AmountInput,
   CoinTXNInput,
@@ -433,7 +432,7 @@ export async function createCoinTXN(
 
   // Convert CoinTXNInput[] to CoinTXNBuildInput[] (strips private keys)
   const buildInputs: CoinTXNBuildInput[] = inputs.map(input => {
-    const { privateKey, ...rest } = input;
+    const { privateKey: _privateKey, ...rest } = input;
     return rest;
   });
 

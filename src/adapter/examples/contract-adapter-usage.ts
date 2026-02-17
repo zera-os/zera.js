@@ -5,15 +5,15 @@
  * and signing them externally via the adapter module.
  */
 
+import { sendCreateContract, sendUpdateContract } from '../../contract/index.js';
+import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
 import {
   buildContractTXN,
   buildContractUpdateTXN,
   signAndFinalize,
   KeyPairSigner
 } from '../index.js';
-import { sendCreateContract, sendUpdateContract } from '../../contract/index.js';
-import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 
 // ============================================================================
 // Example 1: Create a new contract

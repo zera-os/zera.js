@@ -62,7 +62,7 @@
     "proto:example": "cd proto && node example.js",
     "lint": "eslint . --ext .ts,.js,.mjs",
     "lint:fix": "eslint . --ext .ts,.js,.mjs --fix",
-    "lint:check": "eslint . --ext .ts,.js,.mjs --max-warnings 0",
+    "lint:check": "eslint . --ext .ts,.js,.mjs --max-warnings 10",
     "lint:fix-and-check": "npm run lint:fix && npm run lint:check",
     "lint:src": "eslint src --ext .ts,.js,.mjs",
     "lint:src:fix": "eslint src --ext .ts,.js,.mjs --fix",

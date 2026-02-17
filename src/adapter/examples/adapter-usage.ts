@@ -14,6 +14,7 @@
  * @example Run with: npx tsx src/adapter/examples/adapter-usage.ts
  */
 
+import { sendCoinTXN } from '../../coin-txn/transaction.js';
 import {
   buildCoinTXN,
   signCoinTXN,
@@ -24,7 +25,6 @@ import {
   type ZeraSigner,
   type CoinTXNBuildInput
 } from '../index.js';
-import { sendCoinTXN } from '../../coin-txn/transaction.js';
 
 // ============================================================================
 // Example 1: Basic — Build, Sign, Send (with KeyPairSigner)

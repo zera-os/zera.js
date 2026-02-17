@@ -5,9 +5,19 @@
 import { describe, it, expect } from 'vitest';
 
 import { CoinTXN, GovernanceVote } from '../../../proto/generated/txn_pb.js';
-import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
-
+import {
+  BaseTXN,
+  SmartContractExecuteTXN,
+  InstrumentContract,
+  ContractUpdateTXN
+} from '../../../proto/generated/txn_pb.js';
+import { buildContractTXN } from '../../contract/create/transaction.js';
+import { buildContractUpdateTXN } from '../../contract/update/transaction.js';
+import { signAndFinalize } from '../../sign/finalize.js';
 import { KeyPairSigner, type ZeraSigner } from '../../sign/signer.js';
+import { buildSmartContractExecuteTXN } from '../../smart-contracts/execute/transaction.js';
+import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
+import { buildVoteTXN, type BuildVoteTXNOptions } from '../../vote/transaction.js';
 import { serializeTransaction, deserializeTransaction, getRegisteredTypes } from '../serialization.js';
 
 // ============================================================================
@@ -196,18 +206,6 @@ describe('Type Registry', () => {
 // Unsigned Builder Validation Tests
 // ============================================================================
 
-import { buildVoteTXN, type BuildVoteTXNOptions } from '../../vote/transaction.js';
-import { buildContractTXN } from '../../contract/create/transaction.js';
-import { buildContractUpdateTXN } from '../../contract/update/transaction.js';
-import { buildSmartContractExecuteTXN } from '../../smart-contracts/execute/transaction.js';
-import { signAndFinalize } from '../../sign/finalize.js';
-
-import {
-  BaseTXN,
-  SmartContractExecuteTXN,
-  InstrumentContract,
-  ContractUpdateTXN
-} from '../../../proto/generated/txn_pb.js';
 
 describe('buildVoteTXN — validation', () => {
   it('should throw if contractId is missing', async () => {

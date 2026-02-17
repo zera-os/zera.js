@@ -11,6 +11,10 @@
  *   4. sendVoteTXN()           — submit to the network
  */
 
+import type { GovernanceVote } from '../../../proto/generated/txn_pb.js';
+import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
+import { sendVoteTXN } from '../../vote/index.js';
 import {
   buildVoteTXN,
   signAndFinalize,
@@ -18,10 +22,6 @@ import {
   deserializeTransaction,
   KeyPairSigner
 } from '../index.js';
-import { sendVoteTXN } from '../../vote/index.js';
-import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
-import type { GovernanceVote } from '../../../proto/generated/txn_pb.js';
 
 // ============================================================================
 // Example 1: Basic vote with KeyPairSigner
