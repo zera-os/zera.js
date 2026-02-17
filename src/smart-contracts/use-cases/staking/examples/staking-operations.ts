@@ -217,9 +217,9 @@ async function step6_releaseInstant(): Promise<string> {
 // RUN — Comment out any step you don't want to execute
 // ============================================================================
 
-await step1_stake();
+//await step1_stake();
 //await step2_updateWallet();
 //await step3_releaseLiquidStake();
-await step4_instantStake();
+//await step4_instantStake();
 //await step5_updateInstantWallet();
 //await step6_releaseInstant();
