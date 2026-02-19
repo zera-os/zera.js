@@ -31,7 +31,7 @@ export interface MwaAuthorizeResponse {
   publicKey: string;   // base58 or hex public key
   address: string;     // human-readable address
   authToken: string;   // opaque session token
-  walletName: string;  // e.g. "VisionHub"
+  walletName: string;  // e.g. "ZERA Wallet"
 }
 
 // ── Reauthorization ─────────────────────────────────────────────────────────

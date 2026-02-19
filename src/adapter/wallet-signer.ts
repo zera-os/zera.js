@@ -6,7 +6,7 @@
  * 1. **WalletSigner** — delegates `sign()` to `window.zera` (PostMessage bridge).
  *    Used when running inside a wallet's dApp browser (embedded mode).
  *
- * 2. **DeepLinkSigner** — delegates `sign()` via a `visionhub://sign` deep link.
+ * 2. **DeepLinkSigner** — delegates `sign()` via a `zera-wallet://sign` deep link.
  *    Used when running in an external browser (Brave, Safari, Chrome).
  *    The signing flow causes a full page redirect; the result is read from
  *    URL params on the next page load.
@@ -124,7 +124,7 @@ const SIGN_PENDING_KEY = 'zera-wallet-sign-pending';
  *
  * When `sign()` is called, it:
  * 1. Saves the pending sign request to `sessionStorage`
- * 2. Navigates to `visionhub://sign?txn=...&callback=...`
+ * 2. Navigates to `zera-wallet://sign?txn=...&callback=...`
  * 3. The wallet app signs and redirects back with `?zera_result=...`
  * 4. The adapter reads the URL param and resolves the pending promise
  *
@@ -166,7 +166,7 @@ export class DeepLinkSigner implements ZeraSigner {
       timestamp: Date.now()
     }));
 
-    // Redirect to wallet app via visionhub:// deep link
+    // Redirect to wallet app via zera-wallet:// deep link
     const deepLink = `${this.deepLinkUrl}sign`
       + `?txn=${encodeURIComponent(encoded)}`
       + `&callback=${encodeURIComponent(this.callbackUrl)}`
@@ -177,6 +177,41 @@ export class DeepLinkSigner implements ZeraSigner {
 
     // This promise never resolves — the page navigates away.
     // The SDK adapter handles the result on the next page load.
+    return new Promise(() => {});
+  }
+
+  /**
+   * Sign an arbitrary message via deep-link redirect to a compatible wallet app.
+   *
+   * This triggers a page navigation. The signature is delivered
+   * via URL params when the wallet app redirects back.
+   */
+  async signMessage(message: Uint8Array): Promise<Uint8Array> {
+    if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+      throw new Error('Deep-link signing requires a browser environment');
+    }
+
+    const encoded = toBase64(message);
+    const requestId = `zr_msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // Save pending sign state so the app can resume after redirect
+    sessionStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
+      type: 'sign-message',
+      requestId,
+      message: encoded,
+      timestamp: Date.now()
+    }));
+
+    // Redirect to wallet app via zera-wallet:// deep link
+    const deepLink = `${this.deepLinkUrl}sign-message`
+      + `?message=${encodeURIComponent(encoded)}`
+      + `&callback=${encodeURIComponent(this.callbackUrl)}`
+      + `&requestId=${encodeURIComponent(requestId)}`
+      + `&publicKey=${encodeURIComponent(this.publicKey)}`;
+
+    window.location.href = deepLink;
+
+    // This promise never resolves — the page navigates away.
     return new Promise(() => {});
   }
 

@@ -176,7 +176,7 @@ function fromBase64(b64: string): Uint8Array {
  * `ZeraSigner` implementation that delegates signing to an active
  * WalletConnect session.
  *
- * Used by dApps: after establishing a WC session with VisionHub,
+ * Used by dApps: after establishing a WC session with a ZERA-compatible wallet,
  * pass this signer to `signAndFinalize()` to sign ZERA transactions
  * remotely via the WC relay.
  *

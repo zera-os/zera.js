@@ -51,7 +51,7 @@ await adapter.disconnect();
 ## How It Works
 
 ```
-Your dApp                         VisionHub
+Your dApp                         ZERA Wallet
 ────────                         ──────────
 adapter.connect()
   └─→ window.zera.request('zera_requestAccounts')
@@ -65,7 +65,7 @@ adapter.signer.sign(txnBytes)
                  └─→ Returns signature
 ```
 
-The `ZeraWalletAdapter` detects `window.zera` (injected by VisionHub's dApp browser)
+The `ZeraWalletAdapter` detects `window.zera` (injected by a compatible wallet's dApp browser)
 and produces a `WalletSigner` that implements the SDK's `ZeraSigner` interface.
 This means all existing SDK functions like `signAndFinalize()` work seamlessly.
 
@@ -79,11 +79,11 @@ This means all existing SDK functions like `signAndFinalize()` work seamlessly.
 const adapter = new ZeraWalletAdapter(config?: WalletAdapterConfig);
 ```
 
-| Config        | Type    | Default          | Description                   |
-| ------------- | ------- | ---------------- | ----------------------------- |
-| `autoConnect` | boolean | `false`          | Auto-connect on creation      |
-| `deepLinkUrl` | string  | `'visionhub://'` | Deep link for mobile redirect |
-| `signTimeout` | number  | `300000` (5 min) | Signing request timeout (ms)  |
+| Config        | Type    | Default            | Description                   |
+| ------------- | ------- | ------------------ | ----------------------------- |
+| `autoConnect` | boolean | `false`            | Auto-connect on creation      |
+| `deepLinkUrl` | string  | `'zera-wallet://'` | Deep link for mobile redirect |
+| `signTimeout` | number  | `300000` (5 min)   | Signing request timeout (ms)  |
 
 #### Properties
 
@@ -93,7 +93,7 @@ const adapter = new ZeraWalletAdapter(config?: WalletAdapterConfig);
 | `publicKey`  | `string \| null`       | Connected wallet's public key                   |
 | `signer`     | `WalletSigner \| null` | ZeraSigner for use with `signAndFinalize`       |
 | `state`      | `WalletAdapterState`   | `'disconnected' \| 'connecting' \| 'connected'` |
-| `isEmbedded` | `boolean`              | True if inside VisionHub dApp browser           |
+| `isEmbedded` | `boolean`              | True if inside a wallet's dApp browser          |
 
 #### Methods
 
@@ -103,7 +103,7 @@ const adapter = new ZeraWalletAdapter(config?: WalletAdapterConfig);
 | `disconnect()`        | Disconnect and clear state                               |
 | `on(event, handler)`  | Listen for `'connect'`, `'disconnect'`, `'error'` events |
 | `off(event, handler)` | Remove event listener                                    |
-| `getDeepLink(url?)`   | Generate VisionHub deep link for the given URL           |
+| `getDeepLink(url?)`   | Generate wallet deep link for the given URL              |
 
 #### Static Methods
 
@@ -211,13 +211,13 @@ function VoteButton({ proposalHash }: { proposalHash: string }) {
 
 ## Desktop Fallback
 
-When not inside VisionHub's dApp browser, redirect users:
+When not inside a wallet's dApp browser, redirect users:
 
 ```typescript
 const adapter = new ZeraWalletAdapter();
 
 if (!ZeraWalletAdapter.isAvailable()) {
-  // Redirect to VisionHub with this page's URL
+  // Redirect to a ZERA-compatible wallet with this page's URL
   window.location.href = adapter.getDeepLink();
 } else {
   await adapter.connect();

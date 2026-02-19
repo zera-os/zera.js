@@ -169,7 +169,7 @@ export class ZeraMwaClient {
    * Initiate an MWA connection to the wallet.
    *
    * On Android, this triggers the `zera-wallet-mwa://` intent,
-   * causing VisionHub to launch its MWA handler. The wallet
+   * causing the wallet to launch its MWA handler. The wallet
    * establishes a local WebSocket session for communication.
    */
   async connect(): Promise<MwaAuthorizeResponse> {
@@ -177,7 +177,7 @@ export class ZeraMwaClient {
 
     try {
       // For now, the connection is established via deep link intent.
-      // The wallet side (VisionHub) handles the WebSocket session.
+      // The wallet side handles the WebSocket session.
       // The web dApp communicates through the redirect-based flow
       // until full WebSocket support is implemented.
 
@@ -216,7 +216,7 @@ export class ZeraMwaClient {
               publicKey: decodeURIComponent(result),
               address: address ? decodeURIComponent(address) : '',
               authToken,
-              walletName: 'VisionHub'
+              walletName: 'ZERA Wallet'
             };
 
             this.sessionInfo = {

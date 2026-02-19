@@ -48,7 +48,7 @@ import { WalletSigner, DeepLinkSigner, type ZeraProvider } from './wallet-signer
 export interface WalletAdapterConfig {
   /** Attempt auto-connect on instantiation (default: false) */
   autoConnect?: boolean;
-  /** Base deep link URL for wallet actions (default: 'visionhub://') */
+  /** Base deep link URL for wallet actions (default: 'zera-wallet://') */
   deepLinkUrl?: string;
   /** Timeout for signing requests in ms (default: 300000 = 5 min) */
   signTimeout?: number;
@@ -82,6 +82,11 @@ const PARAM_RESULT = 'zera_result';
 const PARAM_REQUEST_ID = 'zera_request_id';
 const PARAM_ERROR = 'zera_error';
 
+// BroadcastChannel for cross-tab result forwarding
+// When the wallet app redirects back (opening a new browser tab), the new tab
+// broadcasts the result so the original tab can complete the connection.
+const BROADCAST_CHANNEL = 'zera-wallet-bridge';
+
 // ============================================================================
 // ADAPTER
 // ============================================================================
@@ -95,8 +100,9 @@ const PARAM_ERROR = 'zera_error';
  *    signs via PostMessage bridge. Zero redirects.
  *
  * 2. **Deep-link redirect** (external browser — Brave, Safari, Chrome) — redirects
- *    to `visionhub://connect?callback=...`, the wallet app shows approval,
- *    redirects back with `?zera_result=...`. Signing also uses deep-link round-trips.
+ *    to `zera-wallet://connect?callback=...`, any compatible wallet app shows
+ *    approval, redirects back with `?zera_result=...`. Signing also uses
+ *    deep-link round-trips.
  *
  * Works in any JavaScript framework — React, Vue, Svelte, vanilla JS, etc.
  */
@@ -110,11 +116,12 @@ export class ZeraWalletAdapter {
   private _connectionMode: WalletConnectionMode | null = null;
   private _listeners: Record<string, EventHandler[]> = {};
   private readonly _config: Required<WalletAdapterConfig>;
+  private _broadcastChannel: BroadcastChannel | null = null;
 
   constructor(config?: WalletAdapterConfig) {
     this._config = {
       autoConnect: config?.autoConnect ?? false,
-      deepLinkUrl: config?.deepLinkUrl ?? 'visionhub://',
+      deepLinkUrl: config?.deepLinkUrl ?? 'zera-wallet://',
       signTimeout: config?.signTimeout ?? 5 * 60 * 1000,
       callbackUrl: config?.callbackUrl ?? ''
     };
@@ -122,6 +129,7 @@ export class ZeraWalletAdapter {
     // Check for deep-link callback result on page load
     if (typeof window !== 'undefined') {
       this._handleRedirectResult();
+      this._setupBroadcastListener();
     }
 
     if (this._config.autoConnect && typeof window !== 'undefined') {
@@ -211,7 +219,7 @@ export class ZeraWalletAdapter {
    *
    * **Strategy 2 — Deep-link redirect (external browser):**
    * Saves pending request to `sessionStorage`, navigates to
-   * `visionhub://connect?callback=...`. The wallet app shows approval,
+   * `zera-wallet://connect?callback=...`. The wallet app shows approval,
    * then redirects back with `?zera_result=...` to resolve the connection.
    *
    * **Manual fallback:**
@@ -307,7 +315,7 @@ export class ZeraWalletAdapter {
     try {
       const result = await provider.request('zera_requestAccounts', {});
       const accounts = Array.isArray(result) ? result : (result as { accounts?: string[] })?.accounts ?? [];
-      // Parse optional addresses array (VisionHub provides actual wallet address)
+      // Parse optional addresses array (wallet app provides actual wallet address)
       const addresses = !Array.isArray(result) ? (result as { addresses?: string[] })?.addresses ?? [] : [];
 
       if (!accounts.length) {
@@ -336,7 +344,7 @@ export class ZeraWalletAdapter {
    * Strategy 2: Connect via deep-link redirect to a compatible wallet app.
    *
    * Saves a pending request to sessionStorage and navigates to
-   * `visionhub://connect?callback=...&requestId=...`.
+   * `zera-wallet://connect?callback=...&requestId=...`.
    *
    * This will cause a full page navigation. When the wallet redirects back,
    * the constructor's `_handleRedirectResult()` reads the params and
@@ -363,7 +371,7 @@ export class ZeraWalletAdapter {
       timestamp: Date.now()
     }));
 
-    // Redirect to wallet app via visionhub:// deep link
+    // Redirect to wallet app via zera-wallet:// deep link
     const deepLink = `${this._config.deepLinkUrl}connect`
       + `?callback=${encodeURIComponent(callbackUrl)}`
       + `&requestId=${encodeURIComponent(requestId)}`;
@@ -432,8 +440,24 @@ export class ZeraWalletAdapter {
       return;
     }
 
-    // Handle connect result
+    // Handle result — determine if this is a connect or sign result
     if (result) {
+      // Check if there's a pending sign request — if so, this result
+      // is a sign response, not a connect response. Let DeepLinkSigner
+      // handle it via checkSignResult() instead.
+      const signPending = typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem('zera-wallet-sign-pending')
+        : null;
+
+      if (signPending) {
+        // This is a sign result — don't treat as connect.
+        // DeepLinkSigner.checkSignResult() will read and clean up.
+        // Just restore any existing connection.
+        this._restoreConnection();
+        return;
+      }
+
+      // This is a connect result
       const publicKey = decodeURIComponent(result);
       const addressParam = url.searchParams.get('zera_address');
       const address = addressParam ? decodeURIComponent(addressParam) : null;
@@ -444,6 +468,12 @@ export class ZeraWalletAdapter {
       this._state = 'connected';
       this._persistConnection();
       this._cleanUrl();
+
+      // Broadcast result to original tab via BroadcastChannel.
+      // On mobile, the wallet app opens a NEW browser tab for the redirect,
+      // so the original tab (where the user clicked "Connect") never gets the
+      // URL params. This broadcast bridges the two tabs.
+      this._broadcastResult({ publicKey, address });
 
       this._emit('connect', { publicKey, address, mode: 'deeplink' });
     }
@@ -509,6 +539,62 @@ export class ZeraWalletAdapter {
       this._emit('connect', { publicKey, address: this._address, mode: this._connectionMode });
     } catch {
       // Corrupt storage — ignore
+    }
+  }
+
+  // ── Private: Cross-Tab Bridge ──────────────────────────────────────
+
+  /**
+   * Listen for wallet connect results from other tabs.
+   * When the wallet app redirects to a NEW tab, the new tab broadcasts the
+   * result here so the original tab can complete the connection seamlessly.
+   */
+  private _setupBroadcastListener(): void {
+    if (typeof BroadcastChannel === 'undefined') return;
+    try {
+      this._broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL);
+      this._broadcastChannel.onmessage = (event: MessageEvent) => {
+        const data = event.data;
+        if (!data || data.type !== 'zera-connect-result') return;
+        // Don't process if already connected
+        if (this._state === 'connected') return;
+
+        const { publicKey, address } = data;
+        if (!publicKey) return;
+
+        this._publicKey = publicKey;
+        this._address = address ?? null;
+        this._connectionMode = 'deeplink';
+        this._signer = new DeepLinkSigner(publicKey, this._config.deepLinkUrl, this._getCallbackUrl());
+        this._state = 'connected';
+        this._persistConnection();
+
+        this._emit('connect', { publicKey, address, mode: 'deeplink' });
+      };
+    } catch {
+      // BroadcastChannel not supported — fall back to normal redirect flow
+    }
+  }
+
+  /**
+   * Broadcast a connect result to other tabs and attempt to close this
+   * (redirect) tab so the user returns to their original tab.
+   */
+  private _broadcastResult(data: { publicKey: string; address: string | null }): void {
+    if (typeof BroadcastChannel === 'undefined') return;
+    try {
+      const bc = new BroadcastChannel(BROADCAST_CHANNEL);
+      bc.postMessage({ type: 'zera-connect-result', ...data });
+      bc.close();
+
+      // Try to close this duplicate tab.
+      // window.close() works on mobile Safari/Chrome in most cases when the
+      // tab was opened by the OS via deep-link redirect (not user-initiated).
+      setTimeout(() => {
+        try { window.close(); } catch { /* ignore */ }
+      }, 300);
+    } catch {
+      // BroadcastChannel not supported — user will just stay in the new tab
     }
   }
 
