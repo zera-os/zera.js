@@ -1,7 +1,8 @@
+/* global URLSearchParams */
 /**
  * Wallet Signers
  *
- * Two implementations of the `ZeraSigner` interface:
+ * Three implementations of the `ZeraSigner` interface:
  *
  * 1. **WalletSigner** — delegates `sign()` to `window.zera` (PostMessage bridge).
  *    Used when running inside a wallet's dApp browser (embedded mode).
@@ -10,6 +11,7 @@
  *    Used when running in an external browser (Brave, Safari, Chrome).
  *    The signing flow causes a full page redirect; the result is read from
  *    URL params on the next page load.
+ *
  *
  * @module adapter/wallet-signer
  */
@@ -43,7 +45,7 @@ function toBase64(bytes: Uint8Array): string {
   }
   let binary = '';
   for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
+    binary += String.fromCharCode(bytes[i] as number);
   }
   return btoa(binary);
 }
@@ -145,6 +147,26 @@ export class DeepLinkSigner implements ZeraSigner {
   }
 
   /**
+   * Helper to format deep links. On Android Chrome, `window.location.href='scheme://'`
+   * is often blocked. We must use the `intent://` fallback syntax for reliable routing.
+   */
+  private _formatDeepLink(action: string, params: URLSearchParams): string {
+    const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+    
+    if (isAndroid && this.deepLinkUrl.startsWith('zera-wallet://')) {
+      // Adding sdk_redirect_caller_package helps VisionHub bounce back to the same browser on Android
+      // Note: In Chrome, we can't reliably read the own package name without native code,
+      // but passing "com.android.chrome" as a best-effort default covers 90% of Android users.
+      if (!params.has('sdk_redirect_caller_package')) {
+        params.append('sdk_redirect_caller_package', 'com.android.chrome');
+      }
+      return `intent://${action}?${params.toString()}#Intent;scheme=zera-wallet;package=com.visiondynamics.visionhub;end`;
+    }
+    
+    return `${this.deepLinkUrl}${action}?${params.toString()}`;
+  }
+
+  /**
    * Sign transaction bytes via deep-link redirect to a compatible wallet app.
    *
    * This triggers a page navigation. The signature is delivered
@@ -166,14 +188,15 @@ export class DeepLinkSigner implements ZeraSigner {
       timestamp: Date.now()
     }));
 
-    // Redirect to wallet app via zera-wallet:// deep link
-    const deepLink = `${this.deepLinkUrl}sign`
-      + `?txn=${encodeURIComponent(encoded)}`
-      + `&callback=${encodeURIComponent(this.callbackUrl)}`
-      + `&requestId=${encodeURIComponent(requestId)}`
-      + `&publicKey=${encodeURIComponent(this.publicKey)}`;
-
-    window.location.href = deepLink;
+    // Redirect to wallet app
+    const params = new URLSearchParams({
+      txn: encoded,
+      callback: this.callbackUrl,
+      requestId,
+      publicKey: this.publicKey
+    });
+    const deepLink = this._formatDeepLink('sign', params);
+    window.location.assign(deepLink);
 
     // This promise never resolves — the page navigates away.
     // The SDK adapter handles the result on the next page load.
@@ -202,14 +225,15 @@ export class DeepLinkSigner implements ZeraSigner {
       timestamp: Date.now()
     }));
 
-    // Redirect to wallet app via zera-wallet:// deep link
-    const deepLink = `${this.deepLinkUrl}sign-message`
-      + `?message=${encodeURIComponent(encoded)}`
-      + `&callback=${encodeURIComponent(this.callbackUrl)}`
-      + `&requestId=${encodeURIComponent(requestId)}`
-      + `&publicKey=${encodeURIComponent(this.publicKey)}`;
-
-    window.location.href = deepLink;
+    // Redirect to wallet app
+    const params = new URLSearchParams({
+      message: encoded,
+      callback: this.callbackUrl,
+      requestId,
+      publicKey: this.publicKey
+    });
+    const deepLink = this._formatDeepLink('sign-message', params);
+    window.location.assign(deepLink);
 
     // This promise never resolves — the page navigates away.
     return new Promise(() => {});
@@ -264,3 +288,4 @@ export class DeepLinkSigner implements ZeraSigner {
     };
   }
 }
+

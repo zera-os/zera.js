@@ -137,7 +137,16 @@ export {
   type WalletAdapterEvent,
   type WalletAdapterState,
   type WalletConnectionMode,
-  type ZeraProvider
+  type ZeraProvider,
+  WalletConnectSigner,
+  ZERA_WC_NAMESPACE,
+  ZERA_WC_CHAINS,
+  ZERA_WC_METHODS,
+  ZERA_WC_EVENTS,
+  ZERA_WC_REQUIRED_NAMESPACES,
+  type WCSignClient,
+  type WCSession,
+  type ZeraWCSignTransactionResult
 } from './src/adapter/index.js';
 
 // Import API services

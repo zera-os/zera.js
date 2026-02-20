@@ -15,14 +15,14 @@ vi.mock('../../../execute/index.js', () => ({
   ParamType: { STRING: 'string', BYTES: 'bytes', UINT32: 'uint32', UINT64: 'uint64' }
 }));
 
-import { createSmartContractExecuteTXN, sendSmartContractExecuteTXN } from '../../../execute/index.js';
 import { ED25519_TEST_KEYS } from '../../../../test-utils/index.js';
-import { stake, stakeAndSend } from '../transactions/stake.js';
-import { updateWallet, updateWalletAndSend } from '../transactions/update-wallet.js';
-import { releaseLiquidStake, releaseLiquidStakeAndSend } from '../transactions/release-liquid-stake.js';
+import { createSmartContractExecuteTXN, sendSmartContractExecuteTXN } from '../../../execute/index.js';
 import { instantStake, instantStakeAndSend } from '../transactions/instant-stake.js';
 import { releaseInstant, releaseInstantAndSend } from '../transactions/release-instant.js';
+import { releaseLiquidStake, releaseLiquidStakeAndSend } from '../transactions/release-liquid-stake.js';
+import { stake, stakeAndSend } from '../transactions/stake.js';
 import { updateInstantWallet, updateInstantWalletAndSend } from '../transactions/update-instant-wallet.js';
+import { updateWallet, updateWalletAndSend } from '../transactions/update-wallet.js';
 import { STAKING_CONTRACT_NAME, STAKING_INSTANCE } from '../utils.js';
 
 // ============================================================================

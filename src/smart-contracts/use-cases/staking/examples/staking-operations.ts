@@ -66,7 +66,7 @@ async function step1_stake(): Promise<string> {
   console.log(`  Amount:  ${STAKE_AMOUNT} ZRA (${STAKE_PARTS} parts)`);
   console.log(`  Wallet:  ${WALLET_ADDRESS}`);
   console.log(`  Term:    ${TERM}`);
-  console.log(`  >> action: "stake"`);
+  console.log('  >> action: "stake"');
   console.log(`  >> params: "${STAKE_PARTS},${WALLET_ADDRESS},${TERM}"`);
   console.log('');
 
@@ -93,7 +93,7 @@ async function step2_updateWallet(): Promise<string> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  Wallet:  ${WALLET_ADDRESS}`);
   console.log(`  Bump ID: ${BUMP_ID}`);
-  console.log(`  >> action: "update_wallet"`);
+  console.log('  >> action: "update_wallet"');
   console.log(`  >> params: "${WALLET_ADDRESS},${BUMP_ID}"`);
   console.log('');
 
@@ -118,8 +118,8 @@ async function step3_releaseLiquidStake(): Promise<string> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('STEP 3: Release Liquid Stake');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`  >> action: "release_liquid_stake"`);
-  console.log(`  >> params: ""`);
+  console.log('  >> action: "release_liquid_stake"');
+  console.log('  >> params: ""');
   console.log('');
 
   const txn = await releaseLiquidStake(
@@ -145,7 +145,7 @@ async function step4_instantStake(): Promise<string> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  Amount:  ${STAKE_AMOUNT} ZRA (${STAKE_PARTS} parts)`);
   console.log(`  Term:    ${TERM}`);
-  console.log(`  >> action: "instant_stake"`);
+  console.log('  >> action: "instant_stake"');
   console.log(`  >> params: "${STAKE_PARTS},${TERM}"`);
   console.log('');
 
@@ -172,7 +172,7 @@ async function step5_updateInstantWallet(): Promise<string> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  Wallet:  ${WALLET_ADDRESS}`);
   console.log(`  Bump ID: ${BUMP_ID}`);
-  console.log(`  >> action: "update_instant_wallet"`);
+  console.log('  >> action: "update_instant_wallet"');
   console.log(`  >> params: "${WALLET_ADDRESS},${BUMP_ID}"`);
   console.log('');
 
@@ -197,8 +197,8 @@ async function step6_releaseInstant(): Promise<string> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('STEP 6: Release Instant Stake');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`  >> action: "release_instant"`);
-  console.log(`  >> params: ""`);
+  console.log('  >> action: "release_instant"');
+  console.log('  >> params: ""');
   console.log('');
 
   const txn = await releaseInstant(

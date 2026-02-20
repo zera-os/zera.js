@@ -1,3 +1,4 @@
+/* global BroadcastChannel, MessageEvent, URLSearchParams */
 /**
  * ZERA Wallet Adapter
  *
@@ -31,8 +32,6 @@
  *
  * const signed = await signAndFinalize(txn, adapter.signer!);
  * await sendVoteTXN(signed);
- *
- * adapter.disconnect();
  * ```
  */
 
@@ -61,7 +60,7 @@ export interface WalletAdapterConfig {
 }
 
 /** Events emitted by the adapter */
-export type WalletAdapterEvent = 'connect' | 'disconnect' | 'error';
+export type WalletAdapterEvent = 'connect' | 'disconnect' | 'error' | 'signResult' | 'signError';
 type EventHandler = (...args: unknown[]) => void;
 
 /** Adapter connection state */
@@ -117,6 +116,7 @@ export class ZeraWalletAdapter {
   private _listeners: Record<string, EventHandler[]> = {};
   private readonly _config: Required<WalletAdapterConfig>;
   private _broadcastChannel: BroadcastChannel | null = null;
+  private _pendingSignResult: { signature: Uint8Array; requestId: string } | null = null;
 
   constructor(config?: WalletAdapterConfig) {
     this._config = {
@@ -170,6 +170,19 @@ export class ZeraWalletAdapter {
 
   /** How the wallet is connected: 'embedded', 'deeplink', 'manual', or null */
   get connectionMode(): WalletConnectionMode | null { return this._connectionMode; }
+
+  /**
+   * Consume a buffered sign result from a deep-link redirect.
+   * Returns the result and clears the buffer. Returns null if no pending result.
+   *
+   * This handles the timing race where the adapter processes the URL params
+   * in its constructor, before React components have mounted their event listeners.
+   */
+  consumePendingSignResult(): { signature: Uint8Array; requestId: string } | null {
+    const result = this._pendingSignResult;
+    this._pendingSignResult = null;
+    return result;
+  }
 
   // ── Static Helpers ───────────────────────────────────────────────────
 
@@ -241,7 +254,7 @@ export class ZeraWalletAdapter {
       return this._connectViaProvider(provider);
     }
 
-    // Strategy 2: Deep-link redirect
+    // Strategy 2: Deep-link redirect (iOS, Android, external browsers)
     return this._connectViaDeepLink();
   }
 
@@ -285,8 +298,8 @@ export class ZeraWalletAdapter {
 
   /** Subscribe to adapter events */
   on(event: WalletAdapterEvent, handler: EventHandler): void {
-    if (!this._listeners[event]) this._listeners[event] = [];
-    this._listeners[event]!.push(handler);
+    const list = this._listeners[event] ?? (this._listeners[event] = []);
+    list.push(handler);
   }
 
   /** Unsubscribe from adapter events */
@@ -341,6 +354,27 @@ export class ZeraWalletAdapter {
   }
 
   /**
+   * Helper to format deep links. On Android Chrome, `window.location.href='scheme://'`
+   * is often blocked. We must use the `intent://` fallback syntax for reliable routing.
+   */
+  private _formatDeepLink(action: string, params: URLSearchParams): string {
+    const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+    const base = this._config.deepLinkUrl;
+    
+    if (isAndroid && base.startsWith('zera-wallet://')) {
+      // Adding sdk_redirect_caller_package helps VisionHub bounce back to the same browser on Android
+      // Note: In Chrome, we can't reliably read the own package name without native code,
+      // but passing "com.android.chrome" as a best-effort default covers 90% of Android users.
+      if (!params.has('sdk_redirect_caller_package')) {
+        params.append('sdk_redirect_caller_package', 'com.android.chrome');
+      }
+      return `intent://${action}?${params.toString()}#Intent;scheme=zera-wallet;package=com.visiondynamics.visionhub;end`;
+    }
+    
+    return `${base}${action}?${params.toString()}`;
+  }
+
+  /**
    * Strategy 2: Connect via deep-link redirect to a compatible wallet app.
    *
    * Saves a pending request to sessionStorage and navigates to
@@ -364,21 +398,25 @@ export class ZeraWalletAdapter {
     const requestId = this._generateRequestId();
     const callbackUrl = this._getCallbackUrl();
 
-    // Save pending state
+    // Save pending state so we can pick it up when the wallet redirects back
     sessionStorage.setItem(PENDING_KEY, JSON.stringify({
-      type: 'connect',
       requestId,
+      callbackUrl,
       timestamp: Date.now()
     }));
 
-    // Redirect to wallet app via zera-wallet:// deep link
-    const deepLink = `${this._config.deepLinkUrl}connect`
-      + `?callback=${encodeURIComponent(callbackUrl)}`
-      + `&requestId=${encodeURIComponent(requestId)}`;
+    // Redirect to wallet app
+    const params = new URLSearchParams({
+      callback: callbackUrl,
+      requestId: requestId
+    });
+    
+    const deepLink = this._formatDeepLink('connect', params);
+    
+    // Use assign for slightly better reliability in some browsers
+    window.location.assign(deepLink);
 
-    window.location.href = deepLink;
-
-    // This promise never resolves — the page navigates away.
+    // This promise never resolves (page navigates away).
     // The connection completes via _handleRedirectResult on the next page load.
     return new Promise(() => {});
   }
@@ -436,7 +474,9 @@ export class ZeraWalletAdapter {
     // Handle error
     if (error) {
       this._cleanUrl();
-      this._emit('error', new Error(decodeURIComponent(error)));
+      const errObj = new Error(decodeURIComponent(error));
+      this._broadcastMessage({ type: 'zera-connect-error', message: errObj.message });
+      this._emit('error', errObj);
       return;
     }
 
@@ -451,9 +491,25 @@ export class ZeraWalletAdapter {
 
       if (signPending) {
         // This is a sign result — don't treat as connect.
-        // DeepLinkSigner.checkSignResult() will read and clean up.
-        // Just restore any existing connection.
+        // Restore any existing connection first.
         this._restoreConnection();
+
+        // Consume the sign result from URL params and emit it
+        // so the dApp can complete the transaction (e.g., submit a vote).
+        try {
+          const signResult = DeepLinkSigner.checkSignResult();
+          if (signResult) {
+            // Buffer the result — components may not have mounted yet.
+            this._pendingSignResult = signResult;
+            this._broadcastMessage({ type: 'zera-sign-result', ...signResult });
+            // Defer emission to allow React to mount listeners first.
+            setTimeout(() => this._emit('signResult', signResult), 0);
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          this._broadcastMessage({ type: 'zera-sign-error', message: errMsg });
+          setTimeout(() => this._emit('signError', err), 0);
+        }
         return;
       }
 
@@ -473,7 +529,7 @@ export class ZeraWalletAdapter {
       // On mobile, the wallet app opens a NEW browser tab for the redirect,
       // so the original tab (where the user clicked "Connect") never gets the
       // URL params. This broadcast bridges the two tabs.
-      this._broadcastResult({ publicKey, address });
+      this._broadcastMessage({ type: 'zera-connect-result', publicKey, address });
 
       this._emit('connect', { publicKey, address, mode: 'deeplink' });
     }
@@ -516,6 +572,14 @@ export class ZeraWalletAdapter {
       const { publicKey, address, mode } = JSON.parse(stored) as { publicKey: string; address?: string; mode: WalletConnectionMode };
       if (!publicKey) return;
 
+      // Validate the stored public key is in expected ZERA identifier format
+      // (e.g. "A_<base58>"). Stale entries from older sessions may be plain
+      // base64 or other formats that will cause downstream errors.
+      if (!publicKey.includes('_')) {
+        localStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+
       this._publicKey = publicKey;
       this._address = address ?? null;
       this._connectionMode = mode ?? 'manual';
@@ -555,21 +619,33 @@ export class ZeraWalletAdapter {
       this._broadcastChannel = new BroadcastChannel(BROADCAST_CHANNEL);
       this._broadcastChannel.onmessage = (event: MessageEvent) => {
         const data = event.data;
-        if (!data || data.type !== 'zera-connect-result') return;
-        // Don't process if already connected
-        if (this._state === 'connected') return;
+        if (!data) return;
 
-        const { publicKey, address } = data;
-        if (!publicKey) return;
+        if (data.type === 'zera-connect-result') {
+          // Don't process if already connected
+          if (this._state === 'connected') return;
 
-        this._publicKey = publicKey;
-        this._address = address ?? null;
-        this._connectionMode = 'deeplink';
-        this._signer = new DeepLinkSigner(publicKey, this._config.deepLinkUrl, this._getCallbackUrl());
-        this._state = 'connected';
-        this._persistConnection();
+          const { publicKey, address } = data;
+          if (!publicKey) return;
 
-        this._emit('connect', { publicKey, address, mode: 'deeplink' });
+          this._publicKey = publicKey;
+          this._address = address ?? null;
+          this._connectionMode = 'deeplink';
+          this._signer = new DeepLinkSigner(publicKey, this._config.deepLinkUrl, this._getCallbackUrl());
+          this._state = 'connected';
+          this._persistConnection();
+
+          this._emit('connect', { publicKey, address, mode: 'deeplink' });
+        } else if (data.type === 'zera-connect-error') {
+          if (this._state === 'connected') return;
+          this._emit('error', new Error(data.message));
+        } else if (data.type === 'zera-sign-result') {
+          const { signature, requestId } = data;
+          this._pendingSignResult = { signature, requestId };
+          this._emit('signResult', { signature, requestId });
+        } else if (data.type === 'zera-sign-error') {
+          this._emit('signError', new Error(data.message));
+        }
       };
     } catch {
       // BroadcastChannel not supported — fall back to normal redirect flow
@@ -577,14 +653,14 @@ export class ZeraWalletAdapter {
   }
 
   /**
-   * Broadcast a connect result to other tabs and attempt to close this
+   * Broadcast a message to other tabs and attempt to close this
    * (redirect) tab so the user returns to their original tab.
    */
-  private _broadcastResult(data: { publicKey: string; address: string | null }): void {
+  private _broadcastMessage(msg: Record<string, unknown>): void {
     if (typeof BroadcastChannel === 'undefined') return;
     try {
       const bc = new BroadcastChannel(BROADCAST_CHANNEL);
-      bc.postMessage({ type: 'zera-connect-result', ...data });
+      bc.postMessage(msg);
       bc.close();
 
       // Try to close this duplicate tab.

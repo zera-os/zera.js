@@ -88,30 +88,6 @@ export {
   type ZeraProvider
 } from './wallet-signer.js';
 
-// ============================================================================
-// MOBILE WALLET ADAPTER (MWA) — Android wallet discovery + sessions
-// ============================================================================
-
-export {
-  ZeraMwaClient,
-  type ZeraMwaClientOptions,
-  type MwaEventType
-} from '../mwa/index.js';
-
-export type {
-  MwaAppIdentity,
-  MwaAuthorizeResponse,
-  MwaSignTransactionResponse,
-  MwaSignMessageResponse,
-  MwaSessionState,
-  MwaSessionInfo
-} from '../mwa/index.js';
-
-export {
-  ZERA_MWA_VERSION,
-  ZERA_MWA_SCHEME,
-  MWA_METHODS
-} from '../mwa/index.js';
 
 // ============================================================================
 // WALLETCONNECT v2 — namespace definitions + signer
@@ -133,7 +109,7 @@ export {
   // Combined
   ALL_WC_REQUIRED_NAMESPACES,
   // Signer
-  WalletConnectSigner,
+  WalletConnectSigner
 } from './walletconnect.js';
 
 export type {
@@ -141,6 +117,6 @@ export type {
   WCSession,
   ZeraWCSignTransactionResult,
   ZeraWCSignMessageResult,
-  ZeraWCGetAccountsResult,
+  ZeraWCGetAccountsResult
 } from './walletconnect.js';
 

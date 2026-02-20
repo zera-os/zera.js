@@ -48,12 +48,12 @@ export const ZERA_WC_CHAINS = ['zera:mainnet'] as const;
 export const ZERA_WC_METHODS = [
   'zera_getAccounts',
   'zera_signTransaction',
-  'zera_signMessage',
+  'zera_signMessage'
 ] as const;
 
 /** Events the wallet may emit for ZERA */
 export const ZERA_WC_EVENTS = [
-  'accountsChanged',
+  'accountsChanged'
 ] as const;
 
 /** Required namespaces object for ZERA — pass to `signClient.connect()` */
@@ -61,8 +61,8 @@ export const ZERA_WC_REQUIRED_NAMESPACES = {
   [ZERA_WC_NAMESPACE]: {
     chains: ZERA_WC_CHAINS as unknown as string[],
     methods: ZERA_WC_METHODS as unknown as string[],
-    events: ZERA_WC_EVENTS as unknown as string[],
-  },
+    events: ZERA_WC_EVENTS as unknown as string[]
+  }
 } as const;
 
 // ============================================================================
@@ -78,12 +78,12 @@ export const SOLANA_WC_CHAINS = ['solana:mainnet'] as const;
 /** JSON-RPC methods the wallet must support for Solana */
 export const SOLANA_WC_METHODS = [
   'solana_signTransaction',
-  'solana_signMessage',
+  'solana_signMessage'
 ] as const;
 
 /** Events the wallet may emit for Solana */
 export const SOLANA_WC_EVENTS = [
-  'accountsChanged',
+  'accountsChanged'
 ] as const;
 
 /** Required namespaces object for Solana */
@@ -91,8 +91,8 @@ export const SOLANA_WC_REQUIRED_NAMESPACES = {
   [SOLANA_WC_NAMESPACE]: {
     chains: SOLANA_WC_CHAINS as unknown as string[],
     methods: SOLANA_WC_METHODS as unknown as string[],
-    events: SOLANA_WC_EVENTS as unknown as string[],
-  },
+    events: SOLANA_WC_EVENTS as unknown as string[]
+  }
 } as const;
 
 // ============================================================================
@@ -102,7 +102,7 @@ export const SOLANA_WC_REQUIRED_NAMESPACES = {
 /** All required namespaces for a dual-chain (ZERA + Solana) session */
 export const ALL_WC_REQUIRED_NAMESPACES = {
   ...ZERA_WC_REQUIRED_NAMESPACES,
-  ...SOLANA_WC_REQUIRED_NAMESPACES,
+  ...SOLANA_WC_REQUIRED_NAMESPACES
 } as const;
 
 // ============================================================================
@@ -151,7 +151,7 @@ function toBase64(bytes: Uint8Array): string {
   }
   let binary = '';
   for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]!);
+    binary += String.fromCharCode(bytes[i] as number);
   }
   return btoa(binary);
 }
@@ -219,9 +219,9 @@ export class WalletConnectSigner implements ZeraSigner {
       request: {
         method: 'zera_signTransaction',
         params: {
-          transaction: toBase64(data),
-        },
-      },
+          transaction: toBase64(data)
+        }
+      }
     });
 
     return fromBase64(result.signature);
@@ -238,9 +238,9 @@ export class WalletConnectSigner implements ZeraSigner {
       request: {
         method: 'zera_signMessage',
         params: {
-          message: toBase64(message),
-        },
-      },
+          message: toBase64(message)
+        }
+      }
     });
 
     return fromBase64(result.signature);

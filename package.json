@@ -103,8 +103,6 @@
   },
   "files": [
     "dist/",
-    "proto/",
-    "proto/generated/",
     "README.md",
     "LICENSE"
   ],

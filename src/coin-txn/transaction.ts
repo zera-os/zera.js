@@ -426,8 +426,8 @@ export async function createCoinTXN(
   const signerKeys = inputs
     .filter(input => !input.allowanceAddress)
     .map(input => ({
-      publicKey: input.publicKey!,
-      privateKey: input.privateKey!
+      publicKey: input.publicKey as string,
+      privateKey: input.privateKey as string
     }));
 
   // Convert CoinTXNInput[] to CoinTXNBuildInput[] (strips private keys)
@@ -445,8 +445,10 @@ export async function createCoinTXN(
   } else {
     // Allowance-only transactions: just add hash (no signatures)
     const bytes = coinTxn.toBinary();
-    const baseData = coinTxn.base!;
-    baseData.hash = createTransactionHash(bytes);
+    const baseData = coinTxn.base;
+    if (baseData) {
+      baseData.hash = createTransactionHash(bytes);
+    }
   }
 
   return coinTxn;
