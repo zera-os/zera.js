@@ -213,18 +213,28 @@ export class WalletConnectSigner implements ZeraSigner {
    * is the raw Ed25519 bytes.
    */
   async sign(data: Uint8Array): Promise<Uint8Array> {
-    const result = await this._client.request<ZeraWCSignTransactionResult>({
-      topic: this._session.topic,
-      chainId: this._chainId,
-      request: {
-        method: 'zera_signTransaction',
-        params: {
-          transaction: toBase64(data)
+    console.log('[WalletConnectSigner] sign() called with length:', data.length);
+    const b64Data = toBase64(data);
+    console.log('[WalletConnectSigner] Converted to base64, length:', b64Data.length);
+    
+    console.log('[WalletConnectSigner] Dispatching zera_signTransaction via WC relay...');
+    try {
+      const result = await this._client.request<ZeraWCSignTransactionResult>({
+        topic: this._session.topic,
+        chainId: this._chainId,
+        request: {
+          method: 'zera_signTransaction',
+          params: {
+            transaction: b64Data
+          }
         }
-      }
-    });
-
-    return fromBase64(result.signature);
+      });
+      console.log('[WalletConnectSigner] Received WC response signature length:', result.signature?.length);
+      return fromBase64(result.signature);
+    } catch (err: any) {
+      console.error('[WalletConnectSigner] Error during WC request:', err);
+      throw err;
+    }
   }
 
   /**

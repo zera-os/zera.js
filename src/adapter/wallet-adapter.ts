@@ -485,8 +485,8 @@ export class ZeraWalletAdapter {
       // Check if there's a pending sign request — if so, this result
       // is a sign response, not a connect response. Let DeepLinkSigner
       // handle it via checkSignResult() instead.
-      const signPending = typeof sessionStorage !== 'undefined'
-        ? sessionStorage.getItem('zera-wallet-sign-pending')
+      const signPending = typeof localStorage !== 'undefined'
+        ? localStorage.getItem('zera-wallet-sign-pending')
         : null;
 
       if (signPending) {

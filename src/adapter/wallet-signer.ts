@@ -181,7 +181,7 @@ export class DeepLinkSigner implements ZeraSigner {
     const requestId = `zr_sign_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     // Save pending sign state so the app can resume after redirect
-    sessionStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
+    localStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
       type: 'sign',
       requestId,
       transaction: encoded,
@@ -218,7 +218,7 @@ export class DeepLinkSigner implements ZeraSigner {
     const requestId = `zr_msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     // Save pending sign state so the app can resume after redirect
-    sessionStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
+    localStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
       type: 'sign-message',
       requestId,
       message: encoded,
@@ -266,13 +266,13 @@ export class DeepLinkSigner implements ZeraSigner {
 
     // Validate against pending request
     if (typeof sessionStorage !== 'undefined') {
-      const pending = sessionStorage.getItem(SIGN_PENDING_KEY);
+      const pending = localStorage.getItem(SIGN_PENDING_KEY);
       if (pending) {
         try {
           const parsed = JSON.parse(pending) as { requestId: string };
           if (requestId && parsed.requestId !== requestId) return null;
         } catch { /* ignore */ }
-        sessionStorage.removeItem(SIGN_PENDING_KEY);
+        localStorage.removeItem(SIGN_PENDING_KEY);
       }
     }
 
