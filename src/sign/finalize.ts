@@ -39,28 +39,18 @@ export async function signAndFinalize<T extends { base?: BaseTXN }>(
   txn: T,
   signer: ZeraSigner
 ): Promise<T> {
-  console.log('[signAndFinalize] Calling toBinary on txn...');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const bytes = (txn as any).toBinary();
-  console.log('[signAndFinalize] bytes length:', bytes.length, 'calling signer.sign()');
-  
-  try {
-    const signature = await signer.sign(bytes);
-    console.log('[signAndFinalize] Received signature, length:', signature.length);
+  const signature = await signer.sign(bytes);
 
-    console.log('[signAndFinalize] Applying signature to baseData...');
-    const baseData = (txn.base || {} as Partial<BaseTXN>) as BaseTXN;
-    baseData.signature = signature;
+  const baseData = (txn.base || {} as Partial<BaseTXN>) as BaseTXN;
+  baseData.signature = signature;
 
-    console.log('[signAndFinalize] Recalculating hash (toBinary)...');
-    const signedBytes = (txn as any).toBinary();
-    baseData.hash = createTransactionHash(signedBytes);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const signedBytes = (txn as any).toBinary();
+  baseData.hash = createTransactionHash(signedBytes);
 
-    console.log('[signAndFinalize] Done! Returning txn.');
-    return txn;
-  } catch (err: any) {
-    console.error('[signAndFinalize] Error during signing/hash generation:', err);
-    throw err;
-  }
+  return txn;
 }
 
 // ============================================================================
