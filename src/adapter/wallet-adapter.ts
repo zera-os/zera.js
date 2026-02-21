@@ -324,6 +324,7 @@ export class ZeraWalletAdapter {
   /** Strategy 1: Connect via detected window.zera provider */
   private async _connectViaProvider(provider: ZeraProvider): Promise<string> {
     this._provider = provider;
+    this._setupProviderListeners(provider);
 
     try {
       const result = await provider.request('zera_requestAccounts', {});
@@ -485,9 +486,10 @@ export class ZeraWalletAdapter {
       // Check if there's a pending sign request — if so, this result
       // is a sign response, not a connect response. Let DeepLinkSigner
       // handle it via checkSignResult() instead.
-      const signPending = typeof localStorage !== 'undefined'
-        ? localStorage.getItem('zera-wallet-sign-pending')
-        : null;
+      const signPending = (() => {
+        try { return localStorage?.getItem('zera-wallet-sign-pending'); }
+        catch { return null; }
+      })();
 
       if (signPending) {
         // This is a sign result — don't treat as connect.
@@ -531,7 +533,7 @@ export class ZeraWalletAdapter {
       // URL params. This broadcast bridges the two tabs.
       this._broadcastMessage({ type: 'zera-connect-result', publicKey, address });
 
-      this._emit('connect', { publicKey, address, mode: 'deeplink' });
+      setTimeout(() => this._emit('connect', { publicKey, address, mode: 'deeplink' }), 0);
     }
   }
 
@@ -551,23 +553,24 @@ export class ZeraWalletAdapter {
   // ── Private: Persistence ─────────────────────────────────────────────
 
   private _persistConnection(): void {
-    if (typeof localStorage === 'undefined' || !this._publicKey) return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({
-      publicKey: this._publicKey,
-      address: this._address,
-      mode: this._connectionMode
-    }));
+    try {
+      if (!this._publicKey) return;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        publicKey: this._publicKey,
+        address: this._address,
+        mode: this._connectionMode
+      }));
+    } catch { /* localStorage unavailable (iOS WebView) */ }
   }
 
   private _clearPersistence(): void {
-    if (typeof localStorage !== 'undefined') localStorage.removeItem(STORAGE_KEY);
-    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(PENDING_KEY);
+    try { localStorage?.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+    try { sessionStorage?.removeItem(PENDING_KEY); } catch { /* ignore */ }
   }
 
   private _restoreConnection(): void {
-    if (typeof localStorage === 'undefined') return;
     try {
-      const stored = localStorage.getItem(STORAGE_KEY);
+      const stored = localStorage?.getItem(STORAGE_KEY);
       if (!stored) return;
       const { publicKey, address, mode } = JSON.parse(stored) as { publicKey: string; address?: string; mode: WalletConnectionMode };
       if (!publicKey) return;
@@ -584,25 +587,26 @@ export class ZeraWalletAdapter {
       this._address = address ?? null;
       this._connectionMode = mode ?? 'manual';
 
-      // For embedded mode, try to re-establish the provider
-      if (mode === 'embedded') {
-        const provider = this._detectProvider();
-        if (provider) {
-          this._provider = provider;
-          this._signer = new WalletSigner(publicKey, provider);
-        } else {
-          // Provider gone (opened in external browser now), fallback to deep-link signer
-          this._connectionMode = 'deeplink';
-          this._signer = new DeepLinkSigner(publicKey, this._config.deepLinkUrl, this._getCallbackUrl());
-        }
+      // Always try to detect the embedded provider first, regardless of
+      // the stored mode. If the page was previously connected via deep-link
+      // (because window.zera wasn't available at connect time, e.g. timing),
+      // but it IS available now, upgrade to embedded mode for seamless signing.
+      const provider = this._detectProvider();
+      if (provider) {
+        this._provider = provider;
+        this._setupProviderListeners(provider);
+        this._connectionMode = 'embedded';
+        this._signer = new WalletSigner(publicKey, provider);
       } else {
+        // No embedded provider — use deep-link signer
+        this._connectionMode = mode === 'embedded' ? 'deeplink' : (mode ?? 'manual');
         this._signer = new DeepLinkSigner(publicKey, this._config.deepLinkUrl, this._getCallbackUrl());
       }
 
       this._state = 'connected';
       this._emit('connect', { publicKey, address: this._address, mode: this._connectionMode });
     } catch {
-      // Corrupt storage — ignore
+      // Corrupt storage or localStorage unavailable — ignore
     }
   }
 
@@ -675,6 +679,43 @@ export class ZeraWalletAdapter {
   }
 
   // ── Private: Helpers ─────────────────────────────────────────────────
+
+  /**
+   * Bind native event listeners to the injected provider so the adapter React State
+   * organically reacts to background disconnections and auto-connections natively.
+   */
+  private _setupProviderListeners(provider: ZeraProvider): void {
+    if (typeof provider.on !== 'function') return;
+
+    provider.on('connect', (...args: unknown[]) => {
+      const info = args[0] as { publicKey?: string; address?: string | null } | undefined;
+      if (!info) return;
+
+      // Don't emit if already connected to this exact key
+      if (this._state === 'connected' && this._publicKey === info.publicKey) return;
+
+      if (info.publicKey) {
+        this._publicKey = info.publicKey;
+        this._address = info.address ?? null;
+        this._connectionMode = 'embedded';
+        this._signer = new WalletSigner(info.publicKey, provider);
+        this._state = 'connected';
+        this._persistConnection();
+        this._emit('connect', { publicKey: info.publicKey, address: info.address, mode: 'embedded' });
+      }
+    });
+
+    provider.on('disconnect', () => {
+      if (this._state === 'disconnected') return;
+      this._publicKey = null;
+      this._address = null;
+      this._signer = null;
+      this._connectionMode = null;
+      this._state = 'disconnected';
+      this._clearPersistence();
+      this._emit('disconnect');
+    });
+  }
 
   private _detectProvider(): ZeraProvider | null {
     if (typeof window === 'undefined') return null;

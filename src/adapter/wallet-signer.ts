@@ -173,7 +173,7 @@ export class DeepLinkSigner implements ZeraSigner {
    * via URL params when the wallet app redirects back.
    */
   async sign(data: Uint8Array): Promise<Uint8Array> {
-    if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+    if (typeof window === 'undefined') {
       throw new Error('Deep-link signing requires a browser environment');
     }
 
@@ -181,12 +181,15 @@ export class DeepLinkSigner implements ZeraSigner {
     const requestId = `zr_sign_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     // Save pending sign state so the app can resume after redirect
-    localStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
-      type: 'sign',
-      requestId,
-      transaction: encoded,
-      timestamp: Date.now()
-    }));
+    // Wrapped in try/catch: localStorage may be null in iOS WebViews
+    try {
+      localStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
+        type: 'sign',
+        requestId,
+        transaction: encoded,
+        timestamp: Date.now()
+      }));
+    } catch { /* localStorage unavailable in this environment */ }
 
     // Redirect to wallet app
     const params = new URLSearchParams({
@@ -210,7 +213,7 @@ export class DeepLinkSigner implements ZeraSigner {
    * via URL params when the wallet app redirects back.
    */
   async signMessage(message: Uint8Array): Promise<Uint8Array> {
-    if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') {
+    if (typeof window === 'undefined') {
       throw new Error('Deep-link signing requires a browser environment');
     }
 
@@ -218,12 +221,15 @@ export class DeepLinkSigner implements ZeraSigner {
     const requestId = `zr_msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
     // Save pending sign state so the app can resume after redirect
-    localStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
-      type: 'sign-message',
-      requestId,
-      message: encoded,
-      timestamp: Date.now()
-    }));
+    // Wrapped in try/catch: localStorage may be null in iOS WebViews
+    try {
+      localStorage.setItem(SIGN_PENDING_KEY, JSON.stringify({
+        type: 'sign-message',
+        requestId,
+        message: encoded,
+        timestamp: Date.now()
+      }));
+    } catch { /* localStorage unavailable in this environment */ }
 
     // Redirect to wallet app
     const params = new URLSearchParams({
@@ -265,8 +271,8 @@ export class DeepLinkSigner implements ZeraSigner {
     if (!sigBase64) return null;
 
     // Validate against pending request
-    if (typeof sessionStorage !== 'undefined') {
-      const pending = localStorage.getItem(SIGN_PENDING_KEY);
+    try {
+      const pending = localStorage?.getItem(SIGN_PENDING_KEY);
       if (pending) {
         try {
           const parsed = JSON.parse(pending) as { requestId: string };
@@ -274,7 +280,7 @@ export class DeepLinkSigner implements ZeraSigner {
         } catch { /* ignore */ }
         localStorage.removeItem(SIGN_PENDING_KEY);
       }
-    }
+    } catch { /* localStorage unavailable */ }
 
     // Clean URL
     url.searchParams.delete('zera_result');
