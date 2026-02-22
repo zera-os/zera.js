@@ -178,7 +178,7 @@ export class DeepLinkSigner implements ZeraSigner {
     }
 
     const encoded = toBase64(data);
-    const requestId = `zr_sign_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = `zr_sign_${crypto.randomUUID().replace(/-/g, '')}`;
 
     // Save pending sign state so the app can resume after redirect
     // Wrapped in try/catch: localStorage may be null in iOS WebViews
@@ -218,7 +218,7 @@ export class DeepLinkSigner implements ZeraSigner {
     }
 
     const encoded = toBase64(message);
-    const requestId = `zr_msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const requestId = `zr_msg_${crypto.randomUUID().replace(/-/g, '')}`;
 
     // Save pending sign state so the app can resume after redirect
     // Wrapped in try/catch: localStorage may be null in iOS WebViews

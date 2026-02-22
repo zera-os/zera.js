@@ -738,7 +738,7 @@ export class ZeraWalletAdapter {
   }
 
   private _generateRequestId(): string {
-    return `zr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    return `zr_${crypto.randomUUID().replace(/-/g, '')}`;
   }
 
   private _emit(event: string, ...args: unknown[]): void {
