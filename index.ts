@@ -74,7 +74,7 @@ export {
 export {
   bridgeZeraToSol,
   bridgeZeraToSolAndSend,
-  type BridgeZeraToSolOptions
+  type BridgeZeraOptions
 } from './src/smart-contracts/use-cases/bridge/zera/index.js';
 
 // Import Solana Bridge functionality (instruction builders)
@@ -82,6 +82,9 @@ export * as solanaBridge from './src/smart-contracts/use-cases/bridge/solana/ind
 
 // Import Guardian Bridge functionality (admin operations)
 export * as guardianBridge from './src/smart-contracts/use-cases/bridge/guardian/index.js';
+
+// Import Staking functionality
+export * as staking from './src/smart-contracts/use-cases/staking/index.js';
 
 // Import Vote functionality
 export {
@@ -99,6 +102,52 @@ export {
   type CreateContractOptions,
   type UpdateContractOptions
 } from './src/contract/index.js';
+
+// Import Sign module (universal signing)
+export {
+  type ZeraSigner,
+  KeyPairSigner,
+  signAndFinalize,
+  signWithKey,
+  signCoinTXN,
+  signCoinTXNWithKeys,
+  type CoinTXNKeyPair
+} from './src/sign/index.js';
+
+// Import Adapter functionality (builders + serialization)
+export {
+  buildCoinTXN,
+  buildVoteTXN,
+  buildContractTXN,
+  buildContractUpdateTXN,
+  buildSmartContractExecuteTXN,
+  serializeTransaction,
+  deserializeTransaction,
+  getRegisteredTypes,
+  ZeraWalletAdapter,
+  WalletSigner,
+  DeepLinkSigner,
+  type CoinTXNBuildInput,
+  type BuildVoteTXNOptions,
+  type BuildContractOptions,
+  type BuildContractUpdateOptions,
+  type BuildSmartContractExecuteOptions,
+  type SerializedTransaction,
+  type WalletAdapterConfig,
+  type WalletAdapterEvent,
+  type WalletAdapterState,
+  type WalletConnectionMode,
+  type ZeraProvider,
+  WalletConnectSigner,
+  ZERA_WC_NAMESPACE,
+  ZERA_WC_CHAINS,
+  ZERA_WC_METHODS,
+  ZERA_WC_EVENTS,
+  ZERA_WC_REQUIRED_NAMESPACES,
+  type WCSignClient,
+  type WCSession,
+  type ZeraWCSignTransactionResult
+} from './src/adapter/index.js';
 
 // Import API services
 export {
@@ -141,10 +190,6 @@ export {
   validateAmount,
   validateBase58Address
 } from './src/shared/utils/validation.js';
-
-
-
-
 
 // Import error classes
 export {

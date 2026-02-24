@@ -85,7 +85,6 @@ export {
   
   // Types
   type BridgeZeraOptions,
-  type BridgeZeraToSolOptions,
   type ReleaseZeraOptions,
   type MintSolOptions,
   type CreateSolOptions,

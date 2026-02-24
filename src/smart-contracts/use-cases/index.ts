@@ -16,7 +16,13 @@
  * Decentralized exchange operations via the `zera_dex_proxy` contract.
  * - Pool management: Create, add/remove/unlock liquidity
  * - Trading: Token swaps with configurable slippage
+ * 
+ * ### Staking
+ * Token staking operations via the `staking_proxy` contract.
+ * - Liquid staking: Stake, update wallet, release
+ * - Instant staking: Instant stake, update wallet, release
  */
 
 export * as bridge from './bridge/index.js';
 export * as dex from './dex/index.js';
+export * as staking from './staking/index.js';

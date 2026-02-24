@@ -138,6 +138,24 @@ export default [
     },
   },
   
+  // Adapter files — browser environment (window, sessionStorage, etc.)
+  {
+    files: ['src/adapter/**/*.ts'],
+    languageOptions: {
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        navigator: 'readonly',
+        sessionStorage: 'readonly',
+        localStorage: 'readonly',
+        URL: 'readonly',
+        btoa: 'readonly',
+        atob: 'readonly',
+        location: 'readonly',
+      },
+    },
+  },
+  
   // JavaScript files configuration
   {
     files: ['**/*.js', '**/*.mjs'],
