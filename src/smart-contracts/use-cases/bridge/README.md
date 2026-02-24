@@ -54,13 +54,12 @@ const { transaction } = await solana.buildLockSolTransaction(
 
 ### Guardian Operations
 
-| Function                              | Direction     | Description                      |
-| ------------------------------------- | ------------- | -------------------------------- |
-| `buildReleaseSplTransaction`          | ZERA → Solana | Release locked SPL tokens        |
-| `buildReleaseSolTransaction`          | ZERA → Solana | Release locked SOL               |
-| `buildMintWrappedTransaction`         | ZERA → Solana | Mint wrapped tokens (first-time) |
-| `buildMintWrappedExistingTransaction` | ZERA → Solana | Mint wrapped tokens (existing)   |
-| `buildRegisterTokenTransaction`       | -             | Register new token with bridge   |
+| Function                              | Direction     | Description                               |
+| ------------------------------------- | ------------- | ----------------------------------------- |
+| `buildReleaseSplTransaction`          | ZERA → Solana | Release locked SPL tokens (including SOL) |
+| `buildMintWrappedTransaction`         | ZERA → Solana | Mint wrapped tokens (first-time)          |
+| `buildMintWrappedExistingTransaction` | ZERA → Solana | Mint wrapped tokens (existing)            |
+| `buildRegisterTokenTransaction`       | -             | Register new token with bridge            |
 
 ## Guardian Service
 

@@ -127,7 +127,7 @@ async function step1_lockSol(): Promise<string> {
     connection
   );
 
-  console.log(`  Vault: ${result.accounts.vault.toBase58()}`);
+  console.log(`  Vault ATA: ${result.accounts.vaultAta.toBase58()}`);
 
   const signature = await signAndSend(result.transaction, [solanaWallet]);
   console.log(`  ✅ Locked! Solana sig: ${signature}`);
@@ -216,11 +216,11 @@ async function step3_burnSol(): Promise<string> {
 /**
  * Fetch the VAA for the ZERA burn transaction and submit it to Solana.
  * This releases native SOL from the bridge vault back to the user.
- * Uses the two-transaction split: TX1 (verify + core), TX2 (release_sol).
+ * Uses the two-transaction split: TX1 (verify + core), TX2 (release_spl).
  */
 async function step4_submitToSolana(zeraHash: string): Promise<string> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('STEP 4: Submit VAA to Solana (release native SOL)');
+  console.log('STEP 4: Submit VAA to Solana (release SPL)');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  ZERA hash: ${zeraHash.slice(0, 30)}...`);
   console.log('  Fetching VAA with exp backoff (1s → 120s)...');
@@ -288,7 +288,7 @@ async function runFullRoundtrip() {
     console.log(`║  1. Lock SOL:      ${solanaSig.slice(0, 38)}...  ║`);
     console.log(`║  2. Mint on ZERA:  ${zeraHash1.slice(0, 38)}...  ║`);
     console.log(`║  3. Burn on ZERA:  ${zeraHash2.slice(0, 38)}...  ║`);
-    console.log(`║  4. Release SOL:   ${finalSig.slice(0, 38)}...  ║`);
+    console.log(`║  4. Release SPL:   ${finalSig.slice(0, 38)}...  ║`);
     console.log('╚══════════════════════════════════════════════════════════════╝');
     console.log('');
 

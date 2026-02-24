@@ -27,7 +27,6 @@ import {
   buildLockSplTransaction,
   buildLockSolTransaction,
   buildReleaseSplTransaction,
-  buildReleaseSolTransaction,
   buildMintWrappedTransaction,
   buildBurnWrappedTransaction,
   buildRequestTokenRegistrationTransaction,
@@ -146,7 +145,7 @@ async function lockSolExample() {
   );
 
   console.log(`  Program ID: ${TOKEN_BRIDGE_PROGRAM_ID.toBase58()}`);
-  console.log(`  Vault: ${result.accounts.vault.toBase58()}`);
+  console.log(`  Vault ATA: ${result.accounts.vaultAta.toBase58()}`);
 
   const signature = await signAndSend(result.transaction, [wallet]);
   console.log(`✓ Confirmed: ${signature}\n`);
@@ -215,86 +214,11 @@ async function releaseSplExample(txnHash: string) {
 }
 
 // ============================================================================
-// EXAMPLE 4: Release Native SOL
+// NOTE: Release Native SOL has been removed.
+// SOL is always released via the SPL path (release_spl) using the
+// Wrapped SOL mint (So11111111111111111111111111111111111111112).
+// Use releaseSplExample above for all release operations.
 // ============================================================================
-
-/**
- * Release native SOL on Solana after VAA verification (ZERA → Solana)
- * Fetches the VAA from guardian and uses the real payload data.
- * @param txnHash - ZERA transaction hash from the burn/lock operation
- */
-async function releaseSolExample(txnHash: string) {
-  console.log('--- Release Native SOL ---\n');
-
-  // 1. Fetch VAA from guardian
-  console.log(`Fetching VAA for: ${txnHash.slice(0, 20)}...`);
-  const vaa = await fetchSolanaVAA(txnHash, GUARDIAN_CONFIG);
-  
-  if (vaa.payload.case !== 'releasePayload') {
-    throw new Error(`Expected releasePayload, got: ${vaa.payload.case}`);
-  }
-  const release = vaa.payload.value;
-  const signatures: GuardianSignature[] = vaa.signatures.map((sig, i) => ({
-    signature: sig,
-    publicKey: vaa.publicKeys[i] || ''
-  }));
-  const timestamp = vaa.timestamp
-    ? Math.floor(Number(vaa.timestamp.seconds.toString()))
-    : Math.floor(Date.now() / 1000);
-
-  console.log(`  Amount: ${release.amount}`);
-  console.log(`  Recipient: ${release.solanaWalletAddress}`);
-  console.log(`  USD: ${release.usdAmount}`);
-  console.log(`  SignedHash: ${vaa.signedHash} (len=${vaa.signedHash.length})`);
-  console.log(`  Sigs: ${vaa.signatures.length}, PKs: ${vaa.publicKeys.length}`);
-
-  // Local Ed25519 verification trace (for testing guardian fixes)
-  const hashBytes = Buffer.from(vaa.signedHash, 'hex');
-  const crypto = await import('crypto');
-  for (let i = 0; i < vaa.signatures.length; i++) {
-    const sigBytes = bs58.decode(vaa.signatures[i] ?? '');
-    const pkBytes = bs58.decode(vaa.publicKeys[i] ?? '');
-    const pubKey = crypto.createPublicKey({
-      key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), Buffer.from(pkBytes)]),
-      format: 'der', type: 'spki'
-    });
-    const valid = crypto.verify(null, hashBytes, pubKey, Buffer.from(sigBytes));
-    console.log(`  ${valid ? '✅' : '❌'} Sig[${i}] + PK[${i}] = ${valid ? 'VALID' : 'INVALID'}`);
-  }
-  console.log('');
-
-  // 2. Build transaction using real VAA data
-  const result = await buildReleaseSolTransaction(
-    {
-      amount: BigInt(release.amount.toString()),
-      recipient: release.solanaWalletAddress,
-      txnId: release.txnHash,
-      timestamp,
-      signatures,
-      expectedHash: vaa.signedHash,
-      usdAmount: BigInt(release.usdAmount.toString())
-    },
-    PAYER,
-    connection
-  );
-
-  console.log(`  Vault: ${result.accounts.vault.toBase58()}`);
-
-  // TX1: Ed25519 signature verification + core post_verified_transfer
-  console.log('  TX1: Verifying signatures + core post_verified_transfer...');
-  const sig1 = await signAndSend(result.verifyTransaction, [wallet], { skipPreflight: true });
-  console.log(`  ✅ TX1 confirmed: ${sig1}`);
-
-  // TX2: Token bridge release_sol (fresh blockhash)
-  const { blockhash: bh2 } = await connection.getLatestBlockhash();
-  result.releaseTransaction.recentBlockhash = bh2;
-
-  console.log('  TX2: Releasing SOL...');
-  const sig2 = await signAndSend(result.releaseTransaction, [wallet], { skipPreflight: true });
-  console.log(`✓ TX2 confirmed: ${sig2}\n`);
-
-  return { ...result, signature: sig2 };
-}
 
 // ============================================================================
 // EXAMPLE 5: Mint Wrapped ZERA Tokens
@@ -535,7 +459,6 @@ async function registerTokenExample(txnHash: string) {
 // lockSplExample().catch(console.error);
 // lockSolExample().catch(console.error); //? Success
 // releaseSplExample("ZERA_TXN_HASH").catch(console.error);
-// releaseSolExample("d56a7b614dce162434ac84039b2ced83acde56a31d0be03a98c5f098342dedd5").catch(console.error);
 // mintWrappedExample("ZERA_TXN_HASH").catch(console.error);
 // burnWrappedExample().catch(console.error);
 // requestTokenRegistrationExample().catch(console.error);  // Step 1: Request (permissionless) //? Success
@@ -550,7 +473,6 @@ export {
   lockSplExample,
   lockSolExample,
   releaseSplExample,
-  releaseSolExample,
   mintWrappedExample,
   burnWrappedExample,
   requestTokenRegistrationExample,

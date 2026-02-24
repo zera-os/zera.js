@@ -19,7 +19,7 @@
  * 
  * ### Solana (./solana)
  * Solana-side bridge operations via on-chain programs.
- * - `buildReleaseSplTransaction` / `buildReleaseSolTransaction`
+ * - `buildReleaseSplTransaction` (handles both SPL and SOL)
  * - `buildLockSplTransaction` / `buildLockSolTransaction`
  * - `buildMintWrappedTransaction` / `buildMintWrappedExistingTransaction`
  * - `buildBurnWrappedTransaction`

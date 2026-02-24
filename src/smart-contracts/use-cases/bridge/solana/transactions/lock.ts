@@ -26,7 +26,6 @@ import {
   TOKEN_BRIDGE_PROGRAM_ID,
   generateDiscriminator,
   deriveRouterSignerPDA,
-  deriveVaultPDA,
   deriveRateLimitStatePDA,
   deriveTokenRegistrationPDA,
   getATA,
@@ -139,17 +138,23 @@ export interface LockSolResult {
   instruction: TransactionInstruction;
   transaction: Transaction;
   accounts: {
-    vault: PublicKey;
+    payerWsolAta: PublicKey;
+    vaultAta: PublicKey;
+    routerSigner: PublicKey;
     routerConfig: PublicKey;
     rateLimitState: PublicKey;
     tokenPriceRegistry: PublicKey;
   };
 }
 
+/** wSOL mint address */
+const WSOL_MINT = new PublicKey('So11111111111111111111111111111111111111112');
+
 /**
  * Build a Lock SOL transaction
  * 
- * Locks native SOL in the vault to bridge to ZERA chain.
+ * Locks native SOL by wrapping to wSOL and depositing to the vault ATA.
+ * Uses the same ATA-based pattern as lock_spl, with the wSOL mint hardcoded.
  */
 export async function buildLockSolTransaction(
   options: LockSolOptions,
@@ -158,7 +163,7 @@ export async function buildLockSolTransaction(
 ): Promise<LockSolResult> {
   const { amount, zeraAddress } = options;
 
-  const [vault] = deriveVaultPDA();
+  const [routerSigner] = deriveRouterSignerPDA();
   const [rateLimitState] = deriveRateLimitStatePDA();
   
   // Additional PDAs required by the on-chain program
@@ -170,8 +175,10 @@ export async function buildLockSolTransaction(
     [Buffer.from('token_price_registry')],
     TOKEN_BRIDGE_PROGRAM_ID
   );
-  // Used marker - for lock operations, we use a placeholder
-  const usedMarker = PublicKey.unique();
+
+  // wSOL ATAs
+  const payerWsolAta = getATA(payer, WSOL_MINT);
+  const vaultAta = getATA(routerSigner, WSOL_MINT);
 
   const amountBigInt = BigInt(amount);
 
@@ -182,24 +189,32 @@ export async function buildLockSolTransaction(
   );
 
   // Account order must match Rust reference exactly:
-  // 1. core_program (readonly)
-  // 2. router_cfg (readonly)
-  // 3. payer (signer, writable)
-  // 4. vault (writable)
-  // 5. used_marker (readonly)
-  // 6. rate_limit_state (writable)
-  // 7. token_price_registry (readonly)
-  // 8. system_program (readonly)
+  // 1.  core_program (readonly)
+  // 2.  router_cfg (readonly)
+  // 3.  payer (signer, writable)
+  // 4.  payer_wsol_ata (writable)
+  // 5.  vault_ata (writable)
+  // 6.  router_signer (readonly)
+  // 7.  wsol_mint (readonly)
+  // 8.  rate_limit_state (writable)
+  // 9.  token_price_registry (readonly)
+  // 10. token_program (readonly)
+  // 11. associated_token_program (readonly)
+  // 12. system_program (readonly)
   const instruction = new TransactionInstruction({
     programId: TOKEN_BRIDGE_PROGRAM_ID,
     keys: [
       { pubkey: CORE_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: routerConfig, isSigner: false, isWritable: false },
       { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: vault, isSigner: false, isWritable: true },
-      { pubkey: usedMarker, isSigner: false, isWritable: false },
+      { pubkey: payerWsolAta, isSigner: false, isWritable: true },
+      { pubkey: vaultAta, isSigner: false, isWritable: true },
+      { pubkey: routerSigner, isSigner: false, isWritable: false },
+      { pubkey: WSOL_MINT, isSigner: false, isWritable: false },
       { pubkey: rateLimitState, isSigner: false, isWritable: true },
       { pubkey: tokenPriceRegistry, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
       { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
     ],
     data: Buffer.from(data)
@@ -216,7 +231,7 @@ export async function buildLockSolTransaction(
   return {
     instruction,
     transaction,
-    accounts: { vault, routerConfig, rateLimitState, tokenPriceRegistry }
+    accounts: { payerWsolAta, vaultAta, routerSigner, routerConfig, rateLimitState, tokenPriceRegistry }
   };
 }
 
