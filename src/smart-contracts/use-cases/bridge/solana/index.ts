@@ -37,8 +37,7 @@
  * - `buildBurnWrappedTransaction` - Burn wrapped ZERA tokens to bridge back
  * 
  * ### Guardian Operations (Releasing)
- * - `buildReleaseSplTransaction` - Release SPL tokens (after ZERA → Solana transfer)
- * - `buildReleaseSolTransaction` - Release native SOL (after ZERA → Solana transfer)
+ * - `buildReleaseSplTransaction` - Release SPL tokens, including SOL (after ZERA → Solana transfer)
  * 
  * ### Utilities
  * - PDA derivation functions for all bridge accounts

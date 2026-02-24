@@ -169,7 +169,9 @@ describe('Solana Bridge Transaction Builders', () => {
 
       expect(result.transaction).toBeInstanceOf(Transaction);
       expect(result.instruction).toBeDefined();
-      expect(result.accounts.vault).toBeInstanceOf(PublicKey);
+      expect(result.accounts.payerWsolAta).toBeInstanceOf(PublicKey);
+      expect(result.accounts.vaultAta).toBeInstanceOf(PublicKey);
+      expect(result.accounts.routerSigner).toBeInstanceOf(PublicKey);
     });
   });
 

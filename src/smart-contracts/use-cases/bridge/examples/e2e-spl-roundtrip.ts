@@ -75,22 +75,19 @@ const ZERA_RECIPIENT = TEST_WALLET_ADDRESSES.alice;
 const SOLANA_DESTINATION = SOLANA_TEST_KEYS.primary.publicKey;
 
 /**
- * SPL token mint address (must be registered on the bridge).
- * This token was registered via e2e-token-registration.ts.
+ * SPL token mint address — Wrapped SOL (wSOL).
+ * Already registered on the bridge as a native Solana asset.
  */
-const SPL_MINT = 'BuyN2KRoiEjYKjiJ514dexZgDou8zBjvKnsGjka1jv1c';
+const SPL_MINT = 'So11111111111111111111111111111111111111112';
 
 /**
- * Wrapped SPL contract ID on ZERA.
- * Format: $sol-<MINT_PREFIX>+<SUFFIX>
- * This is assigned during the guardian create_sol / mint_sol flow.
- * Update this after the first Solana → ZERA transfer creates the wrapped token.
+ * Wrapped SOL contract ID on ZERA.
  */
-const WRAPPED_SPL_CONTRACT = '$sol-BuyN2+000000';
+const WRAPPED_SPL_CONTRACT = '$sol-SOL+000000';
 
-/** Amount of SPL tokens to bridge (in smallest units for Solana, decimal for ZERA) */
-const SPL_AMOUNT_ATOMIC = '10000000000';
-const SPL_AMOUNT_DECIMAL = '1';
+/** Amount to bridge: 0.01 SOL (in lamports for Solana, decimal for ZERA) */
+const SPL_AMOUNT_ATOMIC = '10000000'; // 0.01 SOL = 10_000_000 lamports
+const SPL_AMOUNT_DECIMAL = '0.01';
 
 // ============================================================================
 // HELPER: Sign and send a Solana transaction
