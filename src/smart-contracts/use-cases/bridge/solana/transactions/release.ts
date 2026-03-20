@@ -62,8 +62,12 @@ export interface ReleaseSplResult {
   tokenInstruction: TransactionInstruction;
   /** Ed25519 signature verification instructions */
   signatureInstructions: TransactionInstruction[];
-  /** Complete transaction ready to sign */
+  /** Combined transaction (backward compatibility) */
   transaction: Transaction;
+  /** TX1: compute budget + ed25519 verify + core post_verified_transfer */
+  verifyTransaction: Transaction;
+  /** TX2: release_spl only */
+  releaseTransaction: Transaction;
   /** Accounts that will be created/modified */
   accounts: {
     recipientAta: PublicKey;
@@ -217,17 +221,38 @@ export async function buildReleaseSplTransaction(
     data: Buffer.from(tokenData)
   });
 
-  // Build complete transaction
+  // Build complete transaction (backward compatibility - single TX)
   const transaction = new Transaction();
-  
+  if (signatureInstructions.length > 0) {
+    transaction.add(
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })
+    );
+  }
   // Add signature verification instructions first
   for (const ix of signatureInstructions) {
     transaction.add(ix);
   }
-  
   // Add core and token instructions
   transaction.add(coreInstruction);
   transaction.add(tokenInstruction);
+
+  // TX1: compute budget + ed25519 verify + core post_verified_transfer
+  const verifyTransaction = new Transaction();
+  if (signatureInstructions.length > 0) {
+    verifyTransaction.add(
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 })
+    );
+  }
+  for (const ix of signatureInstructions) {
+    verifyTransaction.add(ix);
+  }
+  verifyTransaction.add(coreInstruction);
+  verifyTransaction.feePayer = payer;
+
+  // TX2: release_spl only
+  const releaseTransaction = new Transaction();
+  releaseTransaction.add(tokenInstruction);
+  releaseTransaction.feePayer = payer;
 
   // Set feePayer
   transaction.feePayer = payer;
@@ -235,6 +260,8 @@ export async function buildReleaseSplTransaction(
   // Get recent blockhash if connection provided
   if (connection) {
     const { blockhash } = await connection.getLatestBlockhash();
+    verifyTransaction.recentBlockhash = blockhash;
+    releaseTransaction.recentBlockhash = blockhash;
     transaction.recentBlockhash = blockhash;
   }
 
@@ -243,6 +270,8 @@ export async function buildReleaseSplTransaction(
     tokenInstruction,
     signatureInstructions,
     transaction,
+    verifyTransaction,
+    releaseTransaction,
     accounts: {
       recipientAta,
       vaultAta,

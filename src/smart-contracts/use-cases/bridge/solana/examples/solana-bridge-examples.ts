@@ -18,7 +18,7 @@
 import bs58 from 'bs58';
 
 import { createClient } from '../../../../../grpc/client-factory.js';
-import { PROTONET_GRPC_CONFIG } from '../../../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../../../shared/utils/testing-defaults/index.js';
 import { SOLANA_TEST_KEYS, SOLANA_TEST_RPC, TEST_WALLET_ADDRESSES } from '../../../../../test-utils/index.js';
 import { fetchSolanaVAA, GuardianService, PayloadRequest, NETWORK_TYPE } from '../../guardian/index.js';
 import type { SolanaPayload } from '../../guardian/index.js';
@@ -42,8 +42,9 @@ import {
 // SHARED CONFIGURATION
 // ============================================================================
 
-/** Solana RPC connection using centralized test configuration */
-const connection = new Connection(SOLANA_TEST_RPC.devnet);
+/** Solana RPC endpoint — override for mainnet or custom RPC */
+const SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+const connection = new Connection(SOLANA_RPC_URL);
 
 /** Test wallet from centralized test keys */
 const wallet = Keypair.fromSecretKey(bs58.decode(SOLANA_TEST_KEYS.primary.privateKey));
@@ -187,7 +188,7 @@ async function releaseSplExample(txnHash: string) {
   console.log(`  USD: ${release.usdAmount}`);
   console.log('');
 
-  // 2. Build transaction using real VAA data
+  // 2. Build transaction using real VAA data (returns separate verify + release transactions)
   const result = await buildReleaseSplTransaction(
     {
       amount: BigInt(release.amount.toString()),
@@ -207,10 +208,20 @@ async function releaseSplExample(txnHash: string) {
 
   console.log(`  Recipient ATA: ${result.accounts.recipientAta.toBase58()}`);
 
-  const signature = await signAndSend(result.transaction, [wallet]);
-  console.log(`✓ Confirmed: ${signature}\n`);
+  // TX1: Ed25519 signature verification + core post_verified_transfer
+  console.log('  TX1: Verifying signatures + core post_verified_transfer...');
+  const sig1 = await signAndSend(result.verifyTransaction, [wallet], { skipPreflight: true });
+  console.log(`  ✅ TX1 confirmed: ${sig1}`);
 
-  return { ...result, signature };
+  // TX2: Token bridge release_spl (fresh blockhash)
+  const { blockhash: bh2 } = await connection.getLatestBlockhash();
+  result.releaseTransaction.recentBlockhash = bh2;
+
+  console.log('  TX2: Releasing SPL tokens...');
+  const sig2 = await signAndSend(result.releaseTransaction, [wallet], { skipPreflight: true });
+  console.log(`✓ TX2 confirmed: ${sig2}\n`);
+
+  return { ...result, signature: sig2 };
 }
 
 // ============================================================================

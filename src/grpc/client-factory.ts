@@ -1,12 +1,35 @@
 /* eslint-disable no-undef */
 import type { ServiceType } from '@bufbuild/protobuf';
-import { createPromiseClient, type PromiseClient } from '@connectrpc/connect';
+import { ConnectError, createPromiseClient, type Interceptor, type PromiseClient } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
 
 import { logger } from '../shared/monitoring/index.js';
 import type { GRPCConfig } from '../types/index.js';
 
 import { createGrpcWebFetch } from './utils/grpc-web-fetch-wrapper.js';
+
+/**
+ * Universal gRPC error normalizer.
+ *
+ * ConnectRPC throws `ConnectError` objects whose properties are non-enumerable,
+ * causing `console.error(err)` to print `{}`.  This interceptor converts every
+ * ConnectError into a standard `Error` with a human-readable message so that
+ * callers (bridge, swap, send, governance, etc.) always get useful diagnostics.
+ */
+const errorNormalizer: Interceptor = (next) => async (req) => {
+  try {
+    return await next(req);
+  } catch (err) {
+    if (err instanceof ConnectError) {
+      const readable = new Error(
+        `gRPC ${req.method.name} failed: [${err.code}] ${err.rawMessage || err.message}`
+      );
+      (readable as any).cause = err;  // preserve original for deep inspection
+      throw readable;
+    }
+    throw err;
+  }
+};
 
 /**
  * Mapping of protobuf service names to desired URL prefixes/service names.
@@ -70,7 +93,7 @@ export function createClient<T extends ServiceType>(
   
   // If the endpoint already includes a service path (e.g., /api, /txn, /validator),
   // remove it since the service mapping will add it back
-  // This prevents URLs like: protonet.zerascan.io/api//GetTokenFeeInfo
+  // This prevents URLs like: mainnet.zerascan.io/api//GetTokenFeeInfo
   if (servicePath) {
     const pathToRemove = `/${servicePath.replace(/\/$/, '')}`;
     if (baseUrl.endsWith(pathToRemove)) {
@@ -212,6 +235,7 @@ export function createClient<T extends ServiceType>(
   const transport = createGrpcWebTransport({
     baseUrl,
     useBinaryFormat: true,
+    interceptors: [errorNormalizer],
     // Use custom fetch wrapper for all client-side environments (RN + Web)
     fetch: !isNodeJs ? createGrpcWebFetch() : retryingFetch
   });

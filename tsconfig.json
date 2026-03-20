@@ -55,7 +55,6 @@
     "**/test/**/*.ts",
     "src/test-reporter.ts",
     "src/api/validator/nonce/examples/basic-example.ts",
-    "src/api/zv-indexer/nonce/examples/index.ts",
     "src/wallet-creation/examples/wallet-storage-manager.ts",
     "proto/**/*.js",
     "proto/**/*.proto"

@@ -38,7 +38,7 @@ import { logger } from '../shared/monitoring/index.js';
 import { validateExactAmountBalance, Decimal } from '../shared/utils/amount-utils.js';
 import { sanitizeProtobufObject } from '../shared/utils/protobuf-utils.js';
 import { MAINNET_GRPC_CONFIG } from '../shared/utils/testing-defaults/index.js';
-import { getTokenInfo, type TokenInfo } from '../shared/utils/token-info.js';
+import { getTokenInfo, type TokenInfo, normalizeContractId } from '../shared/utils/token-info.js';
 import { toSmallestUnits } from '../shared/utils/unified-amount-conversion.js';
 import { isValidContractId } from '../shared/utils/validation.js';
 import { signCoinTXNWithKeys } from '../sign/finalize.js';
@@ -339,19 +339,27 @@ export async function buildCoinTXN(
   baseMemo: string = '',
   grpcConfig: GRPCConfig = MAINNET_GRPC_CONFIG
 ): Promise<CoinTXN> {
-  // Validate
-  validateTransactionRequirements(inputs, outputs, contractId);
+  // Normalize all contract IDs to canonical casing for consistent lookups
+  const normalizedContractId = normalizeContractId(contractId);
+  const normalizedFeeConfig: FeeConfig = {
+    ...feeConfig,
+    ...(feeConfig.baseFeeId && { baseFeeId: normalizeContractId(feeConfig.baseFeeId) }),
+    ...(feeConfig.contractFeeId && { contractFeeId: normalizeContractId(feeConfig.contractFeeId) }),
+    ...(feeConfig.interfaceFeeId && { interfaceFeeId: normalizeContractId(feeConfig.interfaceFeeId) })
+  };
+
+  validateTransactionRequirements(inputs, outputs, normalizedContractId);
 
   const tokenInfoMap = await getTokenInfo(
-    contractId,
-    [feeConfig.contractFeeId, feeConfig.interfaceFeeId, feeConfig.baseFeeId].filter((id): id is string => Boolean(id)),
+    normalizedContractId,
+    [normalizedFeeConfig.contractFeeId, normalizedFeeConfig.interfaceFeeId, normalizedFeeConfig.baseFeeId].filter((id): id is string => Boolean(id)),
     grpcConfig
   );
 
   // Process inputs (without private keys)
   const inputsCopy = inputs.map(i => ({ ...i }));
   const { publicKeys, inputTransfers, nonces, allowanceAddresses, allowanceNonces } = await processUnsignedInputs(
-    inputsCopy, contractId, tokenInfoMap, grpcConfig
+    inputsCopy, normalizedContractId, tokenInfoMap, grpcConfig
   );
 
   // Filter inputs for validation (remove allowance authorizers)
@@ -359,16 +367,16 @@ export async function buildCoinTXN(
     ? inputsCopy.slice(1)
     : inputsCopy;
 
-  const outputTransfers = processOutputs(outputs, tokenInfoMap, contractId);
+  const outputTransfers = processOutputs(outputs, tokenInfoMap, normalizedContractId);
 
-  validateTransactionBalance(validationInputs, outputs, contractId, tokenInfoMap);
+  validateTransactionBalance(validationInputs, outputs, normalizedContractId, tokenInfoMap);
   validateFeePercentages(inputTransfers);
 
   // Build unsigned transaction
-  const initialTxnBase = createBaseTransaction(feeConfig.baseFeeId, '1', baseMemo);
+  const initialTxnBase = createBaseTransaction(normalizedFeeConfig.baseFeeId, '1', baseMemo);
   const initialCoinTxnData: Partial<CoinTXN> = {
     base: initialTxnBase,
-    contractId,
+    contractId: normalizedContractId,
     auth: createTransferAuth(publicKeys, [], nonces, allowanceAddresses, allowanceNonces),
     inputTransfers,
     outputTransfers
@@ -378,8 +386,8 @@ export async function buildCoinTXN(
 
   // Calculate fees
   const feeConfigHelper: FeeConfigHelper<CoinTXN> = {
-    ...feeConfig,
-    ...(grpcConfig && !feeConfig.grpcConfig ? { grpcConfig } : {}),
+    ...normalizedFeeConfig,
+    ...(grpcConfig && !normalizedFeeConfig.grpcConfig ? { grpcConfig } : {}),
     contractId: coinTxn.contractId,
     protoObject: coinTxn,
     tokenInfoMap

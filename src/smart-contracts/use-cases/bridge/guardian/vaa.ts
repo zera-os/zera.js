@@ -78,8 +78,12 @@ export interface SubmitVAAToZeraOptions {
   privateKeyBase58: string;
   /** Optional fee amount in USD (skips auto-calculation if provided) */
   feeAmountUsd?: string;
+  /** Optional gas fee in USD for smart contract execution */
+  gasFeeInUsd?: number;
   /** Optional fee contract ID (defaults to the bridged token if not specified) */
   feeId?: string;
+  /** Optional fee amount in raw parts (overrides auto-calculation) */
+  feeAmount?: string;
   /** Optional: Retry VAA fetch with exponential backoff */
   retryOptions?: VAARetryOptions;
 }
@@ -253,7 +257,7 @@ export async function fetchSolanaVAA(
   };
 
   if (retryOptions?.retry) {
-    return fetchWithRetry('SolanaVAA', doFetch, retryOptions);
+    return fetchWithRetry(`SolanaVAA tx=${txnHash}`, doFetch, retryOptions);
   }
   return doFetch();
 }
@@ -298,7 +302,7 @@ export async function fetchZeraVAA(
   };
 
   if (retryOptions?.retry) {
-    return fetchWithRetry('ZeraVAA', doFetch, retryOptions);
+    return fetchWithRetry(`ZeraVAA tx=${txSignature}`, doFetch, retryOptions);
   }
   return doFetch();
 }
@@ -398,8 +402,8 @@ export async function submitVAAToSolana(
       }
       operationType = 'release_sol';
     } else {
-      // SPL token release
-      const { transaction } = await buildReleaseSplTransaction(
+      // SPL token release — two-transaction split (matches SOL/mint patterns)
+      const { verifyTransaction, releaseTransaction } = await buildReleaseSplTransaction(
         {
           amount: BigInt(release.amount.toString()),
           recipient: release.solanaWalletAddress,
@@ -415,13 +419,23 @@ export async function submitVAAToSolana(
         payer.publicKey,
         connection
       );
-        
-      transaction.sign(payer);
-        
+
+      // TX1: Ed25519 signature verification + core post_verified_transfer
+      verifyTransaction.sign(payer);
       if (skipConfirmation) {
-        signature = await connection.sendRawTransaction(transaction.serialize(), { skipPreflight });
+        await connection.sendRawTransaction(verifyTransaction.serialize(), { skipPreflight });
       } else {
-        signature = await sendAndConfirmTransaction(connection, transaction, [payer], { skipPreflight });
+        await sendAndConfirmTransaction(connection, verifyTransaction, [payer], { skipPreflight });
+      }
+
+      // TX2: Token bridge release_spl (needs fresh blockhash)
+      const { blockhash } = await connection.getLatestBlockhash();
+      releaseTransaction.recentBlockhash = blockhash;
+      releaseTransaction.sign(payer);
+      if (skipConfirmation) {
+        signature = await connection.sendRawTransaction(releaseTransaction.serialize(), { skipPreflight });
+      } else {
+        signature = await sendAndConfirmTransaction(connection, releaseTransaction, [payer], { skipPreflight });
       }
       operationType = 'release_spl';
     }
@@ -581,7 +595,9 @@ export async function submitVAAToZera(
         payload: zeraPayload,
         grpcConfig: zeraConfig,
         ...(options.feeAmountUsd !== undefined && { feeAmountUsd: options.feeAmountUsd }),
-        ...(options.feeId !== undefined && { feeId: options.feeId })
+        ...(options.gasFeeInUsd !== undefined && { gasFeeInUsd: options.gasFeeInUsd }),
+        ...(options.feeId !== undefined && { feeId: options.feeId }),
+        ...(options.feeAmount !== undefined && { feeAmountUsd: options.feeAmount })
       }
     );
     operationType = 'release';
@@ -599,7 +615,9 @@ export async function submitVAAToZera(
         payload: zeraPayload,
         grpcConfig: zeraConfig,
         ...(options.feeAmountUsd !== undefined && { feeAmountUsd: options.feeAmountUsd }),
-        ...(options.feeId !== undefined && { feeId: options.feeId })
+        ...(options.gasFeeInUsd !== undefined && { gasFeeInUsd: options.gasFeeInUsd }),
+        ...(options.feeId !== undefined && { feeId: options.feeId }),
+        ...(options.feeAmount !== undefined && { feeAmountUsd: options.feeAmount })
       }
     );
     operationType = 'mint';
@@ -617,7 +635,9 @@ export async function submitVAAToZera(
         payload: zeraPayload,
         grpcConfig: zeraConfig,
         ...(options.feeAmountUsd !== undefined && { feeAmountUsd: options.feeAmountUsd }),
-        ...(options.feeId !== undefined && { feeId: options.feeId })
+        ...(options.gasFeeInUsd !== undefined && { gasFeeInUsd: options.gasFeeInUsd }),
+        ...(options.feeId !== undefined && { feeId: options.feeId }),
+        ...(options.feeAmount !== undefined && { feeAmountUsd: options.feeAmount })
       }
     );
     operationType = 'mint';

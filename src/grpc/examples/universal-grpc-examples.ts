@@ -5,7 +5,7 @@
  * Focuses on infrastructure patterns rather than business logic.
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { 
   createValidatorAPIClient
 } from '../api/validator-api-client.js';
@@ -22,7 +22,7 @@ export async function examplePreConfiguredClients() {
   try {
     // Create validator API client (pre-configured for validator operations)
     const validatorClient = createValidatorAPIClient({
-      host: PROTONET_GRPC_CONFIG.host,
+      host: MAINNET_GRPC_CONFIG.host,
       timeout: 10000
     });
     
@@ -32,7 +32,7 @@ export async function examplePreConfiguredClients() {
     
     // Create transaction client (pre-configured for transaction operations)
     const transactionClient = createTransactionClient({
-      host: PROTONET_GRPC_CONFIG.host,
+      host: MAINNET_GRPC_CONFIG.host,
       timeout: 15000
     });
     

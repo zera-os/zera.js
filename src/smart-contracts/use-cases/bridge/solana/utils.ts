@@ -5,8 +5,7 @@
  * Uses @solana/web3.js for proper Solana primitives.
  */
 
-import { createHash } from 'crypto';
-
+import { sha256 } from '@noble/hashes/sha2.js';
 import {
   TOKEN_PROGRAM_ID as SPL_TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
@@ -71,7 +70,7 @@ export const ATA_PROGRAM_ID = ASSOCIATED_TOKEN_PROGRAM_ID;
  * @returns 8-byte discriminator
  */
 export function generateDiscriminator(name: string): Uint8Array {
-  const hash = createHash('sha256').update(name).digest();
+  const hash = sha256(new TextEncoder().encode(name));
   return new Uint8Array(hash.slice(0, 8));
 }
 
@@ -252,8 +251,7 @@ export function encodeBorshOption<T>(
  * Hash contract ID using SHA256 to derive mint PDA seed
  */
 export function hashContractId(contractId: string): Uint8Array {
-  const hash = createHash('sha256').update(contractId).digest();
-  return new Uint8Array(hash);
+  return sha256(new TextEncoder().encode(contractId));
 }
 
 // ============================================================================

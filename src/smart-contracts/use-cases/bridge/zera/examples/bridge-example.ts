@@ -18,7 +18,7 @@
  * ```
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS, SOLANA_TEST_KEYS } from '../../../../../test-utils/index.js';
 import { sendSmartContractExecuteTXN } from '../../../../execute/index.js';
 import {
@@ -33,8 +33,8 @@ import {
 // SHARED CONFIGURATION
 // ============================================================================
 
-/** ZERA network configuration (protonet) */
-const ZERA_CONFIG = PROTONET_GRPC_CONFIG;
+/** ZERA network configuration (mainnet) */
+const ZERA_CONFIG = MAINNET_GRPC_CONFIG;
 
 /** Fee amount in USD for bridge transactions */
 const FEE_AMOUNT_USD = '2.00'; // $5.00 USD

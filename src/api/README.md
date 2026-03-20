@@ -17,7 +17,7 @@ This module provides API services for interacting with ZERA Network validators.
 - Network status
 - Transaction validation
 
-### ZV Indexer (`zv-indexer/`)
+### Vision Dynamics Indexer API
 
 - Third-party indexing service
 - Real-time blockchain data

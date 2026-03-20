@@ -15,8 +15,3 @@ export const TESTNET_GRPC_CONFIG: GRPCConfig = {
   fallbackToHttp: true
 };
 
-export const PROTONET_GRPC_CONFIG: GRPCConfig = {
-  host: 'protonet.zerascan.io',
-  protocol: 'https',
-  fallbackToHttp: true
-};

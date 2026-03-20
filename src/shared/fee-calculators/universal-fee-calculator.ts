@@ -50,7 +50,7 @@ import {
   toDecimal, 
   Decimal 
 } from '../utils/amount-utils.js';
-import { type TokenInfo } from '../utils/token-info.js';
+import { type TokenInfo, normalizeContractId } from '../utils/token-info.js';
 import { toSmallestUnits } from '../utils/unified-amount-conversion.js';
 
 import { 
@@ -590,9 +590,13 @@ function calculateGasFee(
     throw new Error(`Token info not found for fee ID ${baseFeeId} when calculating gas fee`);
   }
 
+  // Non-native fee instruments (anything other than $ZRA+0000) incur a 10x cost multiplier
+  const NON_NATIVE_FEE_MULTIPLIER = 10;
+  const feeMultiplier = baseFeeId !== '$ZRA+0000' ? NON_NATIVE_FEE_MULTIPLIER : 1;
+
   // Gas fee is provided in USD (e.g., 0.50 for 50 cents)
   // Scale to 1e18 for precision: convert USD to scaled cents (multiply by 100 to get cents, then by 1e18)
-  const gasFeeInUsdScaled = new Decimal(gasFeeInUsd).mul(1e18);
+  const gasFeeInUsdScaled = new Decimal(gasFeeInUsd).mul(1e18).mul(feeMultiplier);
   
   // Convert USD cents to fee token units using exchange rate
   // Exchange rate is stored as: 1 fee token = X USD cents
@@ -720,13 +724,17 @@ async function calculateNetworkFee(
   // Capture the new wallet fee from the API response (1e18 = $1.00 format)
   const newWalletFeeScaled = baseFeeResponse.newWalletFee || '0';
   
+  // Non-native fee instruments (anything other than $ZRA+0000) incur a 10x cost multiplier
+  const NON_NATIVE_FEE_MULTIPLIER = 10;
+  const feeMultiplier = baseFeeId !== '$ZRA+0000' ? NON_NATIVE_FEE_MULTIPLIER : 1;
+
   // API returns fees in 1e18 = $1.00 format, convert to USD
   // byte_fee is per-byte, key_fee is the total key+hash fee for this signer
   const perByteFee = new Decimal(baseFeeResponse.byteFee || '0').div(new Decimal(10).pow(18));
-  const totalKeyAndHashFees = new Decimal(baseFeeResponse.keyFee || '0').div(new Decimal(10).pow(18));
+  const totalKeyAndHashFees = new Decimal(baseFeeResponse.keyFee || '0').div(new Decimal(10).pow(18)).mul(feeMultiplier);
 
-  // Calculate initial base network fee: transaction size * per-byte fee
-  const baseNetworkFeeEquiv = toDecimal(transactionSize).mul(perByteFee);
+  // Calculate initial base network fee: transaction size * per-byte fee (with non-native multiplier)
+  const baseNetworkFeeEquiv = toDecimal(transactionSize).mul(perByteFee).mul(feeMultiplier);
   
   // Calculate initial total network fee: base fee + key fees + hash fees
   const totalNetworkFeeScaled = baseNetworkFeeEquiv.add(totalKeyAndHashFees).mul(1e18);
@@ -779,8 +787,8 @@ async function calculateNetworkFee(
     // Add the size difference to transaction size
     const correctedTransactionSize = transactionSize + feeSizeDifference;
     
-    // Recalculate base network fee with corrected size
-    const correctedBaseNetworkFeeEquiv = toDecimal(correctedTransactionSize).mul(perByteFee);
+    // Recalculate base network fee with corrected size (with non-native multiplier)
+    const correctedBaseNetworkFeeEquiv = toDecimal(correctedTransactionSize).mul(perByteFee).mul(feeMultiplier);
     
     // Recalculate total network fee
     const correctedTotalNetworkFeeEquiv = correctedBaseNetworkFeeEquiv.add(totalKeyAndHashFees).mul(1e18);
@@ -792,7 +800,7 @@ async function calculateNetworkFee(
     const correctedRoundedFee = correctedTotalNetworkFee.mul(precisionMultiplier).floor().div(precisionMultiplier);
     
     // Update the fee in smallest units with precise denomination-based precision
-    transactionAmount = toSmallestUnits(correctedRoundedFee.toString(), baseFeeId);
+    transactionAmount = toSmallestUnits(correctedRoundedFee.toString(), baseFeeId, conversionOptions);
     
     // Update transaction size for return value
     transactionSize = correctedTransactionSize;
@@ -914,8 +922,11 @@ async function calculateNewTokenBalanceFee(
 
   // 4. Calculate new wallet fee per address in the base fee token's smallest units
   // newWalletFeeScaled is in 1e18 = $1.00 format from the BaseFee API
+  // Non-native fee instruments (anything other than $ZRA+0000) incur a 10x cost multiplier
+  const NON_NATIVE_FEE_MULTIPLIER = 10;
+  const feeMultiplier = baseFeeId !== '$ZRA+0000' ? NON_NATIVE_FEE_MULTIPLIER : 1;
   const feePerAddressScaled = new Decimal(newWalletFeeScaled);
-  const totalFeeScaled = feePerAddressScaled.mul(addressesWithoutBalance);
+  const totalFeeScaled = feePerAddressScaled.mul(addressesWithoutBalance).mul(feeMultiplier);
 
   // Convert USD to base fee token smallest units using exchange rate
   const tokenInfo = tokenInfoMap.get(baseFeeId);
@@ -975,8 +986,8 @@ export class UniversalFeeCalculator {
   static async calculateFee<T extends TransactionMessage>(
     options: FeeConfigHelper<T>
   ): Promise<T> {
-    // Ensure base fee id default
-    const effectiveBaseFeeId = options.baseFeeId || '$ZRA+0000';
+    // Ensure base fee id default and normalize casing
+    const effectiveBaseFeeId = normalizeContractId(options.baseFeeId || '$ZRA+0000');
 
     // Ensure tokenInfoMap includes base fee token info
     const workingTokenInfoMap: Map<string, TokenInfo> = options.tokenInfoMap || new Map<string, TokenInfo>();
@@ -989,6 +1000,11 @@ export class UniversalFeeCalculator {
         }, options.grpcConfig);
         for (const token of response.tokens) {
           workingTokenInfoMap.set(token.contractId, token);
+          // Also store under normalized form if API-returned case differs
+          const normalized = normalizeContractId(token.contractId);
+          if (normalized !== token.contractId) {
+            workingTokenInfoMap.set(normalized, token);
+          }
         }
       } catch {
         // If we cannot fetch, proceed; downstream will error with a precise message if needed

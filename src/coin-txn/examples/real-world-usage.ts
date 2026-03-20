@@ -9,7 +9,7 @@
  */
 
 import type { FeeConfig } from '../../shared/fee-calculators/universal-fee-calculator.js';
-import { MAINNET_GRPC_CONFIG, PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import {
   ED25519_TEST_KEYS,
   ED448_TEST_KEYS,
@@ -70,7 +70,7 @@ export async function exampleSimpleTransfer(customFeeConfig?: FeeConfig, customG
     // overestimatePercent: 2.5 // default 5% if not specified
   };
 
-  // Use custom gRPC config if provided, otherwise fall back to PROTONET_GRPC_CONFIG
+  // Use custom gRPC config if provided, otherwise fall back to MAINNET_GRPC_CONFIG
   const grpcConfig = customGrpcConfig || MAINNET_GRPC_CONFIG;
   
   try {
@@ -181,7 +181,7 @@ export async function exampleMultiInputTransfer(): Promise<void> {
     console.log('🔨 Creating multi-input transaction...');
     // Use testing gRPC configuration inline
 
-    const coinTxn = await createCoinTXN(inputs, outputs, '$ZRA+0000', feeConfig, '', PROTONET_GRPC_CONFIG);
+    const coinTxn = await createCoinTXN(inputs, outputs, '$ZRA+0000', feeConfig, '', MAINNET_GRPC_CONFIG);
     
     console.log('✅ Multi-input transaction created!');
     console.log('  Inputs:', inputs.length);
@@ -252,7 +252,7 @@ export async function exampleMultiOutputTransfer(): Promise<void> {
   
   try {
     console.log('🔨 Creating multi-output transaction...');
-    const coinTxn = await createCoinTXN(inputs, outputs, '$ZRA+0000', feeConfig, '', PROTONET_GRPC_CONFIG);
+    const coinTxn = await createCoinTXN(inputs, outputs, '$ZRA+0000', feeConfig, '', MAINNET_GRPC_CONFIG);
     
     console.log('✅ Multi-output transaction created!');
     console.log('  Recipients:', outputs.length);
@@ -325,7 +325,7 @@ export async function exampleComplexTransfer(): Promise<void> {
   
   try {
     console.log('🔨 Creating complex transaction...');
-    const coinTxn = await createCoinTXN(inputs, outputs, '$HELLO+0000', feeConfig, '', PROTONET_GRPC_CONFIG);
+    const coinTxn = await createCoinTXN(inputs, outputs, '$HELLO+0000', feeConfig, '', MAINNET_GRPC_CONFIG);
     
     console.log('✅ Complex transaction created!');
     console.log('  Inputs:', inputs.length);
@@ -383,7 +383,7 @@ export async function exampleCustomFees(): Promise<void> {
     console.log('  Base fee:', customFeeConfig.baseFee);
     console.log('  Contract fee:', customFeeConfig.contractFee);
     
-    const coinTxn = await createCoinTXN(input, output, '$TESTFEES+0000', customFeeConfig, '', PROTONET_GRPC_CONFIG);
+    const coinTxn = await createCoinTXN(input, output, '$TESTFEES+0000', customFeeConfig, '', MAINNET_GRPC_CONFIG);
     
     console.log('✅ Custom fee transaction created!');
     
@@ -438,7 +438,7 @@ export async function exampleAllowanceTransfer(): Promise<void> {
   try {    
     console.log('🔨 Creating allowance transfer...');
     
-    const coinTxn = await createCoinTXN(inputs, outputs, '$ZRA+0000', { baseFeeId: '$ZRA+0000' }, 'Allowance authorization', PROTONET_GRPC_CONFIG);
+    const coinTxn = await createCoinTXN(inputs, outputs, '$ZRA+0000', { baseFeeId: '$ZRA+0000' }, 'Allowance authorization', MAINNET_GRPC_CONFIG);
     
     console.log('✅ Allowance transaction created!');
     
@@ -501,7 +501,7 @@ export async function exampleManualNonce(): Promise<void> {
     console.log('  Note: Network nonce fetch will be skipped');
     console.log('  Note: Fee calculation will be skipped (manual fee provided)');
 
-    const coinTxn = await createCoinTXN(inputs, outputs, '$ZRA+0000', feeConfig, '', PROTONET_GRPC_CONFIG);
+    const coinTxn = await createCoinTXN(inputs, outputs, '$ZRA+0000', feeConfig, '', MAINNET_GRPC_CONFIG);
 
     console.log('✅ Transaction created with manual nonce!');
     console.log('  Manual nonce used: 5');
@@ -553,7 +553,7 @@ export async function exampleErrorHandling(): Promise<void> {
     };
     
     console.log('🔨 Attempting transaction with invalid data...');
-    await createCoinTXN(invalidInput, invalidOutput, '$ZRA+0000', feeConfig, '', PROTONET_GRPC_CONFIG);
+    await createCoinTXN(invalidInput, invalidOutput, '$ZRA+0000', feeConfig, '', MAINNET_GRPC_CONFIG);
     
     console.log('❌ This should not have succeeded!');
     

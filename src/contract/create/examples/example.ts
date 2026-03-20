@@ -6,7 +6,29 @@
  * This file has not been fully tested and is for illustrative purposes only. It does not cover all validaity checks.
  */
 
-import { PROTONET_GRPC_CONFIG, MAINNET_GRPC_CONFIG } from '../../../shared/utils/testing-defaults/index.js';
+import { protoInt64 } from '@bufbuild/protobuf';
+
+import { Timestamp } from '../../../../proto/generated/google/protobuf/timestamp_pb.js';
+import {
+  Governance,
+  GOVERNANCE_TYPE,
+  PROPOSAL_PERIOD,
+  RestrictedKey,
+  PublicKey,
+  ContractFees,
+  CONTRACT_FEE_TYPE,
+  CONTRACT_TYPE,
+  ExpenseRatio,
+  PreMintWallet,
+  CoinDenomination,
+  KeyValuePair,
+  TokenCompliance,
+  Compliance,
+  MaxSupplyRelease,
+  Stage
+} from '../../../../proto/generated/txn_pb.js';
+import { getPublicKeyBytes, sanitizeAndDecodeAddress } from '../../../shared/crypto/address-utils.js';
+import { MAINNET_GRPC_CONFIG } from '../../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS, TEST_WALLET_ADDRESSES } from '../../../test-utils/index.js';
 import type { CreateContractOptions } from '../../shared/types.js';
 import { 
@@ -18,6 +40,7 @@ import {
   convertDollarAmountToContractFee
 } from '../../shared/utils.js';
 import { createContract, sendCreateContract } from '../transaction.js';
+
 
 /**
  * Create a contract with configurable features
@@ -54,37 +77,12 @@ async function createContractExample(): Promise<void> {
     const memo = 'Creating contract with selected features';
 
     // ============================================
-    // Import required modules
-    // ============================================
-    const { create, protoInt64 } = await import('@bufbuild/protobuf');
-    const { 
-      GovernanceSchema, 
-      GOVERNANCE_TYPE,
-      PROPOSAL_PERIOD,
-      RestrictedKeySchema,
-      PublicKeySchema,
-      ContractFeesSchema,
-      CONTRACT_FEE_TYPE,
-      CONTRACT_TYPE,
-      ExpenseRatioSchema,
-      PreMintWalletSchema,
-      CoinDenominationSchema,
-      KeyValuePairSchema,
-      TokenComplianceSchema,
-      ComplianceSchema,
-      MaxSupplyReleaseSchema
-    } = await import('../../../../proto/generated/txn_pb.js');
-    const { TimestampSchema } = await import('../../../../proto/generated/google/protobuf/timestamp_pb.js');
-    const { getPublicKeyBytes, sanitizeAndDecodeAddress } = await import('../../../../src/shared/crypto/address-utils.js');
-
-    // ============================================
     // Build optional features based on flags
     // ============================================
     
     // Governance
     let governance;
     if (USE_GOVERNANCE) {
-      const { StageSchema } = await import('../../../../proto/generated/txn_pb.js');
 
       // Specify percentages in human-readable format (e.g., 50.5 for 50.5%)
       // Change this value to switch between governance types
@@ -98,31 +96,31 @@ async function createContractExample(): Promise<void> {
         // STAGED governance: Multiple stages of governance, must pass quorum to get to next stage and if max approved specified proposals through determined by passing quorum + total number of votes. Meaning that a technical pass of quroum and threshold does not mean the proposal will make it to the next stage.
 
         const stages = [
-          create(StageSchema, {
+          new Stage({
             length: 7,
             period: PROPOSAL_PERIOD.DAYS,
             break: false, // Not a break stage
             maxApproved: 10 // Max proposals approved in this stage
           }),
-          create(StageSchema, {
+          new Stage({
             length: 7,
             period: PROPOSAL_PERIOD.DAYS,
             break: true, // BREAK STAGE - no voting during this period
             maxApproved: 5
           }),
-          create(StageSchema, {
+          new Stage({
             length: 7,
             period: PROPOSAL_PERIOD.DAYS,
             break: false,
             maxApproved: 3
           }),
-          create(StageSchema, {
+          new Stage({
             length: 7,
             period: PROPOSAL_PERIOD.DAYS,
             break: false,
             maxApproved: 2
           }),
-          create(StageSchema, {
+          new Stage({
             length: 0, // REMAINDER - represents remainder of proposal period
             period: PROPOSAL_PERIOD.DAYS,
             break: false,
@@ -132,7 +130,7 @@ async function createContractExample(): Promise<void> {
 
 
         // Requires: votingPeriod, proposalPeriod, startTimestamp
-        governance = create(GovernanceSchema, {
+        governance = new Governance({
           type: GOVERNANCE_TYPE.STAGED,
           regularQuorum: convertPercentToRegularQuorum(regularQuorumPercent), // 50.0% = 5000
           fastQuorum: convertPercentToFastQuorum(fastQuorumPercent), // 75.5% = 7525
@@ -143,14 +141,14 @@ async function createContractExample(): Promise<void> {
           votingPeriod: 1, // Month (as per proposalPeriod setting)
           proposalPeriod: PROPOSAL_PERIOD.MONTHS,
           stageLength: stages,
-          startTimestamp: create(TimestampSchema, {
+          startTimestamp: new Timestamp({
             seconds: protoInt64.parse(Math.floor(Date.now() / 1000)) // starting timestamp of the whole cycle - for example, start of the month, on a monthly cycle
           })
         });
       } else if (GOVERNANCE_TYPE_SELECTION === 'CYCLE') {
         // CYCLE governance: Proposals are grouped into cycles, with stages within each cycle
         // Requires: votingPeriod, proposalPeriod, startTimestamp, maxApproved
-        governance = create(GovernanceSchema, {
+        governance = new Governance({
           type: GOVERNANCE_TYPE.CYCLE,
           regularQuorum: convertPercentToRegularQuorum(regularQuorumPercent), // 50.0% = 5000
           fastQuorum: convertPercentToFastQuorum(fastQuorumPercent), // 75.5% = 7525
@@ -160,7 +158,7 @@ async function createContractExample(): Promise<void> {
           allowMulti: true, // Allow multiple choice proposals
           votingPeriod: 30, // Days (as per proposalPeriod setting)
           proposalPeriod: PROPOSAL_PERIOD.DAYS,
-          startTimestamp: create(TimestampSchema, {
+          startTimestamp: new Timestamp({
             seconds: protoInt64.parse(Math.floor(Date.now() / 1000)) // starting timestamp of the whole cycle - for example, start of the month, on a monthly cycle
           }),
           maxApproved: 10 // Max proposals approved in entire cycle
@@ -169,7 +167,7 @@ async function createContractExample(): Promise<void> {
         // STAGGERED governance: Every proposal has the same voting period length and starts when proposal is made
         // Requires: votingPeriod, proposalPeriod
         // Does NOT require: startTimestamp, maxApproved
-        governance = create(GovernanceSchema, {
+        governance = new Governance({
           type: GOVERNANCE_TYPE.STAGGERED,
           regularQuorum: convertPercentToRegularQuorum(regularQuorumPercent), // 50.0% = 5000
           fastQuorum: convertPercentToFastQuorum(fastQuorumPercent), // 75.5% = 7525
@@ -184,7 +182,7 @@ async function createContractExample(): Promise<void> {
       } else if (GOVERNANCE_TYPE_SELECTION === 'ADAPTIVE') {
         // ADAPTIVE governance: Every proposal has its own specified voting period
         // Does NOT require: votingPeriod, proposalPeriod, startTimestamp, maxApproved
-        governance = create(GovernanceSchema, {
+        governance = new Governance({
           type: GOVERNANCE_TYPE.ADAPTIVE,
           regularQuorum: convertPercentToRegularQuorum(regularQuorumPercent), // 50.0% = 5000
           fastQuorum: convertPercentToFastQuorum(fastQuorumPercent), // 75.5% = 7525
@@ -206,9 +204,9 @@ async function createContractExample(): Promise<void> {
       // Use Alice's public key for restricted key 1
       const restrictedKey1PublicKeyId = ED25519_TEST_KEYS.alice.publicKey;
       const restrictedKey1Bytes = getPublicKeyBytes(restrictedKey1PublicKeyId);
-      const restrictedKey1 = create(RestrictedKeySchema, {
-        publicKey: create(PublicKeySchema, {
-          single: restrictedKey1Bytes
+      const restrictedKey1 = new RestrictedKey({
+        publicKey: new PublicKey({
+          single: restrictedKey1Bytes as Uint8Array<ArrayBuffer>
         }),
         timeDelay: BigInt(86400), // 1 day delay
         global: true,
@@ -227,9 +225,9 @@ async function createContractExample(): Promise<void> {
       // Use Bob's public key for restricted key 2
       const restrictedKey2PublicKeyId = ED25519_TEST_KEYS.bob.publicKey;
       const restrictedKey2Bytes = getPublicKeyBytes(restrictedKey2PublicKeyId);
-      const restrictedKey2 = create(RestrictedKeySchema, {
-        publicKey: create(PublicKeySchema, {
-          single: restrictedKey2Bytes
+      const restrictedKey2 = new RestrictedKey({
+        publicKey: new PublicKey({
+          single: restrictedKey2Bytes as Uint8Array<ArrayBuffer>
         }),
         timeDelay: BigInt(0),
         global: false,
@@ -272,7 +270,7 @@ async function createContractExample(): Promise<void> {
         feeValue = '0';
       }
 
-      contractFees = create(ContractFeesSchema, {
+      contractFees = new ContractFees({
         fee: feeValue,
         feeAddress: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.alice), // Use Alice's address for fee recipient
         // burn and validator are always percentages (100% = 1000000000000000000)
@@ -287,12 +285,12 @@ async function createContractExample(): Promise<void> {
     let expenseRatio;
     if (USE_EXPENSE_RATIO) {
       expenseRatio = [
-        create(ExpenseRatioSchema, {
+        new ExpenseRatio({
           day: 1,
           month: 1, // January
           percent: 10000 // 10%
         }),
-        create(ExpenseRatioSchema, {
+        new ExpenseRatio({
           day: 15,
           month: 6, // June
           percent: 15000 // 15%
@@ -303,7 +301,7 @@ async function createContractExample(): Promise<void> {
     // Coin Denomination (always required)
     const denominationName = 'base'; // Name of the denomination
     const denominationAmount = '1000000000000000000'; // 1 base unit = 1 token (18 decimals)
-    const coinDenomination = create(CoinDenominationSchema, {
+    const coinDenomination = new CoinDenomination({
       denominationName,
       amount: denominationAmount
     });
@@ -327,13 +325,13 @@ async function createContractExample(): Promise<void> {
       const denominationForConversion = coinDenomination.amount;
       
       premintWallets = [
-        create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.alice), // Alice's address
+        new PreMintWallet({
+          address: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.alice) as Uint8Array<ArrayBuffer>, // Alice's address
           // Convert 1 token to parts
           amount: convertAmountToParts(1.0, contractId, denominationForConversion)
         }),
-        create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.bob), // Bob's address
+        new PreMintWallet({
+          address: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.bob) as Uint8Array<ArrayBuffer>, // Bob's address
           // Convert 0.5 tokens to parts
           amount: convertAmountToParts(0.5, contractId, denominationForConversion)
         })
@@ -344,11 +342,11 @@ async function createContractExample(): Promise<void> {
     let customParameters;
     if (USE_CUSTOM_PARAMETERS) {
       customParameters = [
-        create(KeyValuePairSchema, {
+        new KeyValuePair({
           key: 'website',
           value: 'https://example.com'
         }),
-        create(KeyValuePairSchema, {
+        new KeyValuePair({
           key: 'description',
           value: 'Example token contract'
         })
@@ -358,13 +356,13 @@ async function createContractExample(): Promise<void> {
     // Token Compliance
     let tokenCompliance;
     if (USE_TOKEN_COMPLIANCE) {
-      const compliance1 = create(ComplianceSchema, {
+      const compliance1 = new Compliance({
         contractId: '$ZRA+0000',
         complianceLevel: 5
       });
 
       tokenCompliance = [
-        create(TokenComplianceSchema, {
+        new TokenCompliance({
           compliance: [compliance1]
         })
       ];
@@ -378,8 +376,8 @@ async function createContractExample(): Promise<void> {
       
       const releaseDate1 = new Date();
       releaseDate1.setFullYear(releaseDate1.getFullYear() + 1);
-      const maxSupplyRelease1 = create(MaxSupplyReleaseSchema, {
-        releaseDate: create(TimestampSchema, {
+      const maxSupplyRelease1 = new MaxSupplyRelease({
+        releaseDate: new Timestamp({
           seconds: protoInt64.parse(Math.floor(releaseDate1.getTime() / 1000)),
           nanos: (releaseDate1.getTime() % 1000) * 1000000
         }),
@@ -389,8 +387,8 @@ async function createContractExample(): Promise<void> {
 
       const releaseDate2 = new Date();
       releaseDate2.setFullYear(releaseDate2.getFullYear() + 2);
-      const maxSupplyRelease2 = create(MaxSupplyReleaseSchema, {
-        releaseDate: create(TimestampSchema, {
+      const maxSupplyRelease2 = new MaxSupplyRelease({
+        releaseDate: new Timestamp({
           seconds: protoInt64.parse(Math.floor(releaseDate2.getTime() / 1000)),
           nanos: (releaseDate2.getTime() % 1000) * 1000000
         }),
@@ -437,7 +435,7 @@ async function createContractExample(): Promise<void> {
       ...(USE_QUASH_THRESHOLD && { quashThreshold: 3 }),
       updateContractFees: USE_CONTRACT_FEES,
       updateExpenseRatio: USE_EXPENSE_RATIO,
-      grpcConfig: PROTONET_GRPC_CONFIG // Use test gRPC configuration
+      grpcConfig: MAINNET_GRPC_CONFIG // Use test gRPC configuration
     };
 
     console.log('Creating contract...');
@@ -464,7 +462,7 @@ async function createContractExample(): Promise<void> {
     
     // Send to network (uncomment to actually submit)
     // console.log('\nSubmitting contract to network...');
-    // const hash = await sendCreateContract(contract, PROTONET_GRPC_CONFIG);
+    // const hash = await sendCreateContract(contract, MAINNET_GRPC_CONFIG);
     // console.log(`✓ Contract submitted with hash: ${hash}`);
     
   } catch (error) {
@@ -505,30 +503,6 @@ async function first(): Promise<void> {
     const privateKeyBase58 = ED25519_TEST_KEYS.alice.privateKey;
     const feeId = '$ZRA+0000';
     const memo = 'literally nothing but being first';
-    
-    // ============================================
-    // Import required modules
-    // ============================================
-    const { create, protoInt64 } = await import('@bufbuild/protobuf');
-    const {
-      GovernanceSchema,
-      GOVERNANCE_TYPE,
-      PROPOSAL_PERIOD,
-      RestrictedKeySchema,
-      PublicKeySchema,
-      ContractFeesSchema,
-      CONTRACT_FEE_TYPE,
-      CONTRACT_TYPE,
-      ExpenseRatioSchema,
-      PreMintWalletSchema,
-      CoinDenominationSchema,
-      KeyValuePairSchema,
-      TokenComplianceSchema,
-      ComplianceSchema,
-      MaxSupplyReleaseSchema
-    } = await import('../../../../proto/generated/txn_pb.js');
-    const { TimestampSchema } = await import('../../../../proto/generated/google/protobuf/timestamp_pb.js');
-    const { getPublicKeyBytes, sanitizeAndDecodeAddress } = await import('../../../../src/shared/crypto/address-utils.js');
     // ============================================
     // Build optional features based on flags
     // ============================================
@@ -536,7 +510,6 @@ async function first(): Promise<void> {
     // Governance
     let governance;
     if (USE_GOVERNANCE) {
-      const { StageSchema } = await import('../../../../proto/generated/txn_pb.js');
 
       // Specify percentages in human-readable format (e.g., 50.5 for 50.5%)
       // Change this value to switch between governance types
@@ -550,31 +523,31 @@ async function first(): Promise<void> {
         // STAGED governance: Multiple stages of governance, must pass quorum to get to next stage and if max approved specified proposals through determined by passing quorum + total number of votes. Meaning that a technical pass of quroum and threshold does not mean the proposal will make it to the next stage.
 
         const stages = [
-          create(StageSchema, {
+          new Stage({
             length: 7,
             period: PROPOSAL_PERIOD.DAYS,
             break: false, // Not a break stage
             maxApproved: 10 // Max proposals approved in this stage
           }),
-          create(StageSchema, {
+          new Stage({
             length: 7,
             period: PROPOSAL_PERIOD.DAYS,
             break: true, // BREAK STAGE - no voting during this period
             maxApproved: 5
           }),
-          create(StageSchema, {
+          new Stage({
             length: 7,
             period: PROPOSAL_PERIOD.DAYS,
             break: false,
             maxApproved: 3
           }),
-          create(StageSchema, {
+          new Stage({
             length: 7,
             period: PROPOSAL_PERIOD.DAYS,
             break: false,
             maxApproved: 2
           }),
-          create(StageSchema, {
+          new Stage({
             length: 0, // REMAINDER - represents remainder of proposal period
             period: PROPOSAL_PERIOD.DAYS,
             break: false,
@@ -584,7 +557,7 @@ async function first(): Promise<void> {
 
 
         // Requires: votingPeriod, proposalPeriod, startTimestamp
-        governance = create(GovernanceSchema, {
+        governance = new Governance({
           type: GOVERNANCE_TYPE.STAGED,
           regularQuorum: convertPercentToRegularQuorum(regularQuorumPercent), // 50.0% = 5000
           fastQuorum: convertPercentToFastQuorum(fastQuorumPercent), // 75.5% = 7525
@@ -595,14 +568,14 @@ async function first(): Promise<void> {
           votingPeriod: 1, // Month (as per proposalPeriod setting)
           proposalPeriod: PROPOSAL_PERIOD.MONTHS,
           stageLength: stages,
-          startTimestamp: create(TimestampSchema, {
+          startTimestamp: new Timestamp({
             seconds: protoInt64.parse(Math.floor(Date.now() / 1000)) // starting timestamp of the whole cycle - for example, start of the month, on a monthly cycle
           })
         });
       } else if (GOVERNANCE_TYPE_SELECTION === 'CYCLE') {
         // CYCLE governance: Proposals are grouped into cycles, with stages within each cycle
         // Requires: votingPeriod, proposalPeriod, startTimestamp, maxApproved
-        governance = create(GovernanceSchema, {
+        governance = new Governance({
           type: GOVERNANCE_TYPE.CYCLE,
           regularQuorum: convertPercentToRegularQuorum(regularQuorumPercent), // 50.0% = 5000
           fastQuorum: convertPercentToFastQuorum(fastQuorumPercent), // 75.5% = 7525
@@ -612,7 +585,7 @@ async function first(): Promise<void> {
           allowMulti: true, // Allow multiple choice proposals
           votingPeriod: 30, // Days (as per proposalPeriod setting)
           proposalPeriod: PROPOSAL_PERIOD.DAYS,
-          startTimestamp: create(TimestampSchema, {
+          startTimestamp: new Timestamp({
             seconds: protoInt64.parse(Math.floor(Date.now() / 1000)) // starting timestamp of the whole cycle - for example, start of the month, on a monthly cycle
           }),
           maxApproved: 10 // Max proposals approved in entire cycle
@@ -621,7 +594,7 @@ async function first(): Promise<void> {
         // STAGGERED governance: Every proposal has the same voting period length and starts when proposal is made
         // Requires: votingPeriod, proposalPeriod
         // Does NOT require: startTimestamp, maxApproved
-        governance = create(GovernanceSchema, {
+        governance = new Governance({
           type: GOVERNANCE_TYPE.STAGGERED,
           regularQuorum: convertPercentToRegularQuorum(regularQuorumPercent), // 50.0% = 5000
           fastQuorum: convertPercentToFastQuorum(fastQuorumPercent), // 75.5% = 7525
@@ -636,7 +609,7 @@ async function first(): Promise<void> {
       } else if (GOVERNANCE_TYPE_SELECTION === 'ADAPTIVE') {
         // ADAPTIVE governance: Every proposal has its own specified voting period
         // Does NOT require: votingPeriod, proposalPeriod, startTimestamp, maxApproved
-        governance = create(GovernanceSchema, {
+        governance = new Governance({
           type: GOVERNANCE_TYPE.ADAPTIVE,
           regularQuorum: convertPercentToRegularQuorum(regularQuorumPercent), // 50.0% = 5000
           fastQuorum: convertPercentToFastQuorum(fastQuorumPercent), // 75.5% = 7525
@@ -658,9 +631,9 @@ async function first(): Promise<void> {
       // Use Alice's public key for restricted key 1
       const restrictedKey1PublicKeyId = 'r_A_AbvUDYs9jmmwikjFojpwLvzNTYp4kwhkv2btkeHk3EkY';
       const restrictedKey1Bytes = getPublicKeyBytes(restrictedKey1PublicKeyId);
-      const restrictedKey1 = create(RestrictedKeySchema, {
-        publicKey: create(PublicKeySchema, {
-          single: restrictedKey1Bytes
+      const restrictedKey1 = new RestrictedKey({
+        publicKey: new PublicKey({
+          single: restrictedKey1Bytes as Uint8Array<ArrayBuffer>
         }),
         //timeDelay: BigInt(86400), // 1 day delay
         global: false,
@@ -703,7 +676,7 @@ async function first(): Promise<void> {
         feeValue = '0';
       }
 
-      contractFees = create(ContractFeesSchema, {
+      contractFees = new ContractFees({
         fee: feeValue,
         feeAddress: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.alice), // Use Alice's address for fee recipient
         // burn and validator are always percentages (100% = 1000000000000000000)
@@ -718,12 +691,12 @@ async function first(): Promise<void> {
     let expenseRatio;
     if (USE_EXPENSE_RATIO) {
       expenseRatio = [
-        create(ExpenseRatioSchema, {
+        new ExpenseRatio({
           day: 1,
           month: 1, // January
           percent: 10000 // 10%
         }),
-        create(ExpenseRatioSchema, {
+        new ExpenseRatio({
           day: 15,
           month: 6, // June
           percent: 15000 // 15%
@@ -734,7 +707,7 @@ async function first(): Promise<void> {
     // Coin Denomination (always required)
     const denominationName = 'firsties'; // Name of the denomination
     const denominationAmount = '1000000000';
-    const coinDenomination = create(CoinDenominationSchema, {
+    const coinDenomination = new CoinDenomination({
       denominationName,
       amount: denominationAmount
     });
@@ -758,28 +731,28 @@ async function first(): Promise<void> {
       const denominationForConversion = coinDenomination.amount;
       
       premintWallets = [
-        create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('4xm3gAmp4WnWHFJmq1dmh6Nci6ncYFEoj3aAXW2LxUgh'),
+        new PreMintWallet({
+          address: sanitizeAndDecodeAddress('4xm3gAmp4WnWHFJmq1dmh6Nci6ncYFEoj3aAXW2LxUgh') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
-        create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('EgzTZj6oaJX3yfNJ1qHHBfKrV8QLyJtmsSiAC7d24WFz'),
+        new PreMintWallet({
+          address: sanitizeAndDecodeAddress('EgzTZj6oaJX3yfNJ1qHHBfKrV8QLyJtmsSiAC7d24WFz') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
-        create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('ALHSQw6sa8WMkKRoyhKiU2gbtkX6F16r1Dk2qZFGCb7o'),
+        new PreMintWallet({
+          address: sanitizeAndDecodeAddress('ALHSQw6sa8WMkKRoyhKiU2gbtkX6F16r1Dk2qZFGCb7o') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
-        create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('8Qx2ccahAWvz5rgaJkyTR7gzEFYBeyKrmmDJfsiCqWST'),
+        new PreMintWallet({
+          address: sanitizeAndDecodeAddress('8Qx2ccahAWvz5rgaJkyTR7gzEFYBeyKrmmDJfsiCqWST') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
-        create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('EYiudHzvJ3L85ximkbdnpobaX8D9eD46XuBEiPfY3ge2'),
+        new PreMintWallet({
+          address: sanitizeAndDecodeAddress('EYiudHzvJ3L85ximkbdnpobaX8D9eD46XuBEiPfY3ge2') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
-        create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('DD191RJ8wKNDHihEtdWt3AdSqsWnJR5NnrX9TVihpLfX'),
+        new PreMintWallet({
+          address: sanitizeAndDecodeAddress('DD191RJ8wKNDHihEtdWt3AdSqsWnJR5NnrX9TVihpLfX') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         })
       ];
@@ -789,7 +762,7 @@ async function first(): Promise<void> {
     let customParameters;
     if (USE_CUSTOM_PARAMETERS) {
       customParameters = [
-        create(KeyValuePairSchema, {
+        new KeyValuePair({
           key: 'uri',
           value: 'https://cdn.zerafile.io/token/$FIRST+0000/uri-Y0Xqp3MHiPn1.json'
         })
@@ -799,13 +772,13 @@ async function first(): Promise<void> {
     // Token Compliance
     let tokenCompliance;
     if (USE_TOKEN_COMPLIANCE) {
-      const compliance1 = create(ComplianceSchema, {
+      const compliance1 = new Compliance({
         contractId: '$ZRA+0000',
         complianceLevel: 5
       });
 
       tokenCompliance = [
-        create(TokenComplianceSchema, {
+        new TokenCompliance({
           compliance: [compliance1]
         })
       ];
@@ -819,8 +792,8 @@ async function first(): Promise<void> {
       
       const releaseDate1 = new Date();
       releaseDate1.setFullYear(releaseDate1.getFullYear() + 1);
-      const maxSupplyRelease1 = create(MaxSupplyReleaseSchema, {
-        releaseDate: create(TimestampSchema, {
+      const maxSupplyRelease1 = new MaxSupplyRelease({
+        releaseDate: new Timestamp({
           seconds: protoInt64.parse(Math.floor(releaseDate1.getTime() / 1000))
         }),
         // Convert 10 tokens to parts
@@ -829,8 +802,8 @@ async function first(): Promise<void> {
 
       const releaseDate2 = new Date();
       releaseDate2.setFullYear(releaseDate2.getFullYear() + 2);
-      const maxSupplyRelease2 = create(MaxSupplyReleaseSchema, {
-        releaseDate: create(TimestampSchema, {
+      const maxSupplyRelease2 = new MaxSupplyRelease({
+        releaseDate: new Timestamp({
           seconds: protoInt64.parse(Math.floor(releaseDate2.getTime() / 1000)),
           nanos: (releaseDate2.getTime() % 1000) * 1000000
         }),
@@ -923,14 +896,10 @@ async function first(): Promise<void> {
  */
 async function exampleManualNonce(): Promise<void> {
   try {
-    const { create } = await import('@bufbuild/protobuf');
-    const {
-      CONTRACT_TYPE,
-      CoinDenominationSchema
-    } = await import('../../../../proto/generated/txn_pb.js');
+    // CONTRACT_TYPE and CoinDenomination imported at file top
 
     // Minimal contract creation with manual nonce
-    const coinDenomination = create(CoinDenominationSchema, {
+    const coinDenomination = new CoinDenomination({
       denominationName: 'base',
       amount: '1000000000000000000'
     });
@@ -946,7 +915,7 @@ async function exampleManualNonce(): Promise<void> {
       coinDenomination,
       maxSupply: '1000000000000000000000',
       memo: 'Contract with manual nonce',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network fetch
       // WARNING: Not validated! Incorrect nonce will cause transaction failure
       nonce: '10'
@@ -960,7 +929,7 @@ async function exampleManualNonce(): Promise<void> {
     console.log('WARNING: Manual nonce is not validated!');
 
     // Note: This will likely fail if the nonce is incorrect
-    // const hash = await sendCreateContract(contract, PROTONET_GRPC_CONFIG);
+    // const hash = await sendCreateContract(contract, MAINNET_GRPC_CONFIG);
     // console.log(`✓ Contract submitted with hash: ${hash}`);
 
   } catch (error) {
@@ -980,14 +949,10 @@ async function exampleManualNonce(): Promise<void> {
  */
 async function exampleFullyOffline(): Promise<void> {
   try {
-    const { create } = await import('@bufbuild/protobuf');
-    const {
-      CONTRACT_TYPE,
-      CoinDenominationSchema
-    } = await import('../../../../proto/generated/txn_pb.js');
+    // CONTRACT_TYPE and CoinDenomination imported at file top
 
     // Minimal contract creation with manual nonce and fee
-    const coinDenomination = create(CoinDenominationSchema, {
+    const coinDenomination = new CoinDenomination({
       denominationName: 'base',
       amount: '1000000000000000000'
     });
@@ -1003,7 +968,7 @@ async function exampleFullyOffline(): Promise<void> {
       coinDenomination,
       maxSupply: '1000000000000000000000',
       memo: 'Fully offline contract creation',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network nonce fetch
       nonce: '15',
       // Manual fee - skips fee calculation, used exactly as provided (no overestimation)

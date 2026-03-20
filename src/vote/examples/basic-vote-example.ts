@@ -6,7 +6,7 @@
  * when omitted.
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS } from '../../test-utils/index.js';
 import { createVoteTXN, sendVoteTXN } from '../index.js';
 
@@ -27,10 +27,10 @@ async function exampleSupportVote() {
     proposalIdHex,
     publicKeyId,
     privateKeyBase58,
-    { support: true, memo: 'Voting Support', grpcConfig: PROTONET_GRPC_CONFIG }
+    { support: true, memo: 'Voting Support', grpcConfig: MAINNET_GRPC_CONFIG }
   );
 
-  const txHashHex = await sendVoteTXN(voteTxn, PROTONET_GRPC_CONFIG);
+  const txHashHex = await sendVoteTXN(voteTxn, MAINNET_GRPC_CONFIG);
   console.log('Submitted VoteTXN. Hash:', txHashHex);
 }
 
@@ -42,10 +42,10 @@ async function exampleAgainstVote() {
     proposalIdHex,
     publicKeyId,
     privateKeyBase58,
-    { support: false, memo: 'Voting Against', grpcConfig: PROTONET_GRPC_CONFIG }
+    { support: false, memo: 'Voting Against', grpcConfig: MAINNET_GRPC_CONFIG }
   );
 
-  const txHashHex = await sendVoteTXN(voteTxn, PROTONET_GRPC_CONFIG);
+  const txHashHex = await sendVoteTXN(voteTxn, MAINNET_GRPC_CONFIG);
   console.log('Submitted VoteTXN (against). Hash:', txHashHex);
 }
 
@@ -60,10 +60,10 @@ async function exampleMultiOptionVote() {
     proposalIdHex,
     publicKeyId,
     privateKeyBase58,
-    { supportOption, memo: `Voting for option ${supportOption}`, grpcConfig: PROTONET_GRPC_CONFIG }
+    { supportOption, memo: `Voting for option ${supportOption}`, grpcConfig: MAINNET_GRPC_CONFIG }
   );
 
-  const txHashHex = await sendVoteTXN(voteTxn, PROTONET_GRPC_CONFIG);
+  const txHashHex = await sendVoteTXN(voteTxn, MAINNET_GRPC_CONFIG);
   console.log('Submitted VoteTXN (multi-option). Hash:', txHashHex);
 }
 
@@ -82,11 +82,11 @@ async function exampleExplicitFee() {
       memo: 'Voting yes (explicit fee)',
       feeId: '$ZRA+0000',
       feeAmountParts: '1000000000000000',
-      grpcConfig: PROTONET_GRPC_CONFIG
+      grpcConfig: MAINNET_GRPC_CONFIG
     }
   );
 
-  const txHashHex = await sendVoteTXN(voteTxn, PROTONET_GRPC_CONFIG);
+  const txHashHex = await sendVoteTXN(voteTxn, MAINNET_GRPC_CONFIG);
   console.log('Submitted VoteTXN. Hash:', txHashHex);
 }
 
@@ -104,11 +104,11 @@ async function exampleCustomOverestimate() {
       support: true,
       memo: 'Voting with custom overestimate',
       overestimatePercent: 0, // No overestimate buffer
-      grpcConfig: PROTONET_GRPC_CONFIG
+      grpcConfig: MAINNET_GRPC_CONFIG
     }
   );
 
-  const txHashHex = await sendVoteTXN(voteTxn, PROTONET_GRPC_CONFIG);
+  const txHashHex = await sendVoteTXN(voteTxn, MAINNET_GRPC_CONFIG);
   console.log('Submitted VoteTXN (0% overestimate). Hash:', txHashHex);
 }
 
@@ -132,7 +132,7 @@ async function exampleManualNonce() {
     {
       support: true,
       memo: 'Vote with manual nonce',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network fetch
       // WARNING: Not validated! Incorrect nonce will cause transaction failure
       nonce: '10'
@@ -141,7 +141,7 @@ async function exampleManualNonce() {
 
   console.log('Transaction created with manual nonce: 10');
   // Note: This will likely fail if the nonce is incorrect
-  // const txHashHex = await sendVoteTXN(voteTxn, PROTONET_GRPC_CONFIG);
+  // const txHashHex = await sendVoteTXN(voteTxn, MAINNET_GRPC_CONFIG);
   // console.log('Submitted VoteTXN. Hash:', txHashHex);
 }
 
@@ -166,7 +166,7 @@ async function exampleFullyOffline() {
     {
       support: true,
       memo: 'Fully offline vote transaction',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network nonce fetch
       nonce: '15',
       // Manual fee - skips fee calculation, used exactly as provided (no overestimation)

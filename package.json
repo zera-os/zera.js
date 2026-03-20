@@ -113,7 +113,8 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs",
       "default": "./dist/index.cjs"
-    }
+    },
+    "./dist/*": "./dist/*"
   },
   "overrides": {
     "text-encoding": "npm:fast-text-encoding@1.0.6"

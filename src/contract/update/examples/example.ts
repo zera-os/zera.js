@@ -6,7 +6,7 @@
  * This file has not been fully tested and is for illustrative purposes only. It does not cover all validity checks.
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS, TEST_WALLET_ADDRESSES } from '../../../test-utils/index.js';
 import type { UpdateContractOptions } from '../../shared/types.js';
 import { 
@@ -346,7 +346,7 @@ async function updateContractExample(): Promise<void> {
         immutableKycStatus: false 
       }),
       ...(USE_QUASH_THRESHOLD && { quashThreshold: 3 }),
-      grpcConfig: PROTONET_GRPC_CONFIG // Use test gRPC configuration
+      grpcConfig: MAINNET_GRPC_CONFIG // Use test gRPC configuration
     };
 
     console.log('Updating contract...');
@@ -374,7 +374,7 @@ async function updateContractExample(): Promise<void> {
     
     // Send to network (uncomment to actually submit)
     // console.log('\nSubmitting contract update to network...');
-    // const hash = await sendUpdateContract(update, PROTONET_GRPC_CONFIG);
+    // const hash = await sendUpdateContract(update, MAINNET_GRPC_CONFIG);
     // console.log(`✓ Contract update submitted with hash: ${hash}`);
     
   } catch (error) {
@@ -401,7 +401,7 @@ async function exampleManualNonce(): Promise<void> {
       privateKeyBase58: ED25519_TEST_KEYS.alice.privateKey,
       name: 'Updated Token Name',
       memo: 'Contract update with manual nonce',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network fetch
       // WARNING: Not validated! Incorrect nonce will cause transaction failure
       nonce: '10'
@@ -415,7 +415,7 @@ async function exampleManualNonce(): Promise<void> {
     console.log('WARNING: Manual nonce is not validated!');
 
     // Note: This will likely fail if the nonce is incorrect
-    // const hash = await sendUpdateContract(update, PROTONET_GRPC_CONFIG);
+    // const hash = await sendUpdateContract(update, MAINNET_GRPC_CONFIG);
     // console.log(`✓ Contract update submitted with hash: ${hash}`);
 
   } catch (error) {
@@ -442,7 +442,7 @@ async function exampleFullyOffline(): Promise<void> {
       privateKeyBase58: ED25519_TEST_KEYS.alice.privateKey,
       name: 'Updated Token Name',
       memo: 'Fully offline contract update',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network nonce fetch
       nonce: '15',
       // Manual fee - skips fee calculation, used exactly as provided (no overestimation)

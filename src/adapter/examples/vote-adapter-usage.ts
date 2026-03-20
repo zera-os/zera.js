@@ -12,7 +12,7 @@
  */
 
 import type { GovernanceVote } from '../../../proto/generated/txn_pb.js';
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
 import { sendVoteTXN } from '../../vote/index.js';
 import {
@@ -41,7 +41,7 @@ export async function exampleBasicVote(): Promise<void> {
     {
       support: true,
       memo: 'I support this!',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       feeAmountParts: '1'
     }
   );
@@ -53,7 +53,7 @@ export async function exampleBasicVote(): Promise<void> {
   console.log('  ✅ Hash added —', signed.base?.hash ? 'hash present' : 'ERROR');
 
   // Step 3 — (Optional) send
-  // const result = await sendVoteTXN(signed, PROTONET_GRPC_CONFIG);
+  // const result = await sendVoteTXN(signed, MAINNET_GRPC_CONFIG);
   // console.log('  🎉 Sent:', result);
 }
 
@@ -73,7 +73,7 @@ export async function exampleRemoteSignVote(): Promise<void> {
     alice.publicKey,
     {
       supportOption: 2,  // multi-option vote
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       feeAmountParts: '1'
     }
   );
