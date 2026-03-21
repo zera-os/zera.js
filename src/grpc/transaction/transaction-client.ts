@@ -5,9 +5,9 @@
  * Minimal wrapper around the generic gRPC client.
  */
 
-import type { PromiseClient } from '@connectrpc/connect';
+import type { Client } from '@connectrpc/connect';
 
-import { TXNService } from '../../../proto/generated/txn_connect.js';
+import { TXNService } from '../../../proto/generated/txn_pb.js';
 import type { 
   CoinTXN, 
   GovernanceVote, 
@@ -57,7 +57,7 @@ function toHex(bytes: Uint8Array): string {
  * Transaction Client Class
  */
 class TransactionClientImpl implements TransactionClient {
-  private client: PromiseClient<typeof TXNService>;
+  private client: Client<typeof TXNService>;
 
   constructor(options: GRPCConfig = {}) {
     const config = { ...options };

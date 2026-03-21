@@ -18,10 +18,19 @@
  * ```
  */
 
-import { protoInt64 } from '@bufbuild/protobuf';
+import { protoInt64, create, toBinary } from '@bufbuild/protobuf';
 
-import { Timestamp } from '../../proto/generated/google/protobuf/timestamp_pb.js';
+import { TimestampSchema } from '../../proto/generated/google/protobuf/timestamp_pb.js';
+import type { Timestamp } from '../../proto/generated/google/protobuf/timestamp_pb.js';
 import {
+  CoinTXNSchema,
+  InputTransfersSchema,
+  OutputTransfersSchema,
+  BaseTXNSchema,
+  TransferAuthenticationSchema,
+  PublicKeySchema
+} from '../../proto/generated/txn_pb.js';
+import type {
   CoinTXN,
   InputTransfers,
   OutputTransfers,
@@ -185,7 +194,7 @@ async function processUnsignedInputs(
     if (!input) throw new Error(`Input at index ${i} is undefined`);
 
     if (input.publicKey) {
-      const publicKeyObj = new PublicKey({ single: new Uint8Array(getPublicKeyBytes(input.publicKey)) });
+      const publicKeyObj = create(PublicKeySchema, { single: new Uint8Array(getPublicKeyBytes(input.publicKey)) });
       publicKeys.push(publicKeyObj);
     } else if (!input.publicKey && !isAllowance) {
       throw new Error(`Input ${i} is missing publicKey`);
@@ -209,7 +218,7 @@ async function processUnsignedInputs(
     const feePercent = input.feePercent !== undefined ? input.feePercent : '100';
     const scaledFeePercent = new Decimal(feePercent).mul(1000000).toFixed(0);
 
-    inputTransfers.push(new InputTransfers({
+    inputTransfers.push(create(InputTransfersSchema, {
       index: protoInt64.parse(i),
       amount: finalAmount,
       feePercent: parseInt(scaledFeePercent, 10)
@@ -241,8 +250,7 @@ function processOutputs(
       : {}
     );
     const data: { walletAddress: Uint8Array; amount?: string; memo?: string } = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      walletAddress: new Uint8Array(sanitizeAndDecodeAddress(output.to) as any) as any
+      walletAddress: new Uint8Array(sanitizeAndDecodeAddress(output.to))
     };
     if (finalAmount && finalAmount !== '0') {
       data.amount = finalAmount;
@@ -250,8 +258,7 @@ function processOutputs(
     if (output.memo && output.memo.trim() !== '') {
       data.memo = output.memo;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return new OutputTransfers(data as any);
+    return create(OutputTransfersSchema, data);
   });
 }
 
@@ -261,7 +268,7 @@ function createBaseTransaction(baseFeeId: string = '$ZRA+0000', baseFee: AmountI
   }
 
   const now = new Date();
-  const timestamp = new Timestamp({
+  const timestamp = create(TimestampSchema, {
     seconds: protoInt64.parse(Math.floor(now.getTime() / 1000)),
     nanos: (now.getTime() % 1000) * 1000000
   });
@@ -274,7 +281,7 @@ function createBaseTransaction(baseFeeId: string = '$ZRA+0000', baseFee: AmountI
   if (baseMemo && baseMemo.trim() !== '') {
     baseData.memo = baseMemo;
   }
-  return new BaseTXN(baseData);
+  return create(BaseTXNSchema, baseData);
 }
 
 function createTransferAuth(
@@ -296,7 +303,7 @@ function createTransferAuth(
   if (signatures && signatures.length > 0) authData.signature = signatures;
   if (allowanceAddresses && allowanceAddresses.length > 0) authData.allowanceAddress = allowanceAddresses;
   if (allowanceNonces && allowanceNonces.length > 0) authData.allowanceNonce = allowanceNonces;
-  return new TransferAuthentication(authData);
+  return create(TransferAuthenticationSchema, authData);
 }
 
 function toHex(bytes: Uint8Array): string {
@@ -374,7 +381,7 @@ export async function buildCoinTXN(
 
   // Build unsigned transaction
   const initialTxnBase = createBaseTransaction(normalizedFeeConfig.baseFeeId, '1', baseMemo);
-  const initialCoinTxnData: Partial<CoinTXN> = {
+  const initialCoinTxnData: Record<string, unknown> = {
     base: initialTxnBase,
     contractId: normalizedContractId,
     auth: createTransferAuth(publicKeys, [], nonces, allowanceAddresses, allowanceNonces),
@@ -382,7 +389,7 @@ export async function buildCoinTXN(
     outputTransfers
   };
 
-  let coinTxn = new CoinTXN(initialCoinTxnData);
+  let coinTxn = create(CoinTXNSchema, initialCoinTxnData);
 
   // Calculate fees
   const feeConfigHelper: FeeConfigHelper<CoinTXN> = {
@@ -398,7 +405,7 @@ export async function buildCoinTXN(
   const sanitizedData = sanitizeProtobufObject(coinTxn, { removeEmptyFields: true });
   if (!sanitizedData) throw new Error('Failed to sanitize transaction object');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  coinTxn = new CoinTXN(sanitizedData as any);
+  coinTxn = create(CoinTXNSchema, sanitizedData);
 
   // Return unsigned — no signatures, no hash
   return coinTxn;
@@ -452,7 +459,7 @@ export async function createCoinTXN(
     coinTxn = signCoinTXNWithKeys(coinTxn, signerKeys);
   } else {
     // Allowance-only transactions: just add hash (no signatures)
-    const bytes = coinTxn.toBinary();
+    const bytes = toBinary(CoinTXNSchema, coinTxn);
     const baseData = coinTxn.base;
     if (baseData) {
       baseData.hash = createTransactionHash(bytes);

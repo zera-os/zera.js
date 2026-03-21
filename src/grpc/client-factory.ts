@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
-import type { ServiceType } from '@bufbuild/protobuf';
-import { ConnectError, createPromiseClient, type Interceptor, type PromiseClient } from '@connectrpc/connect';
+import type { GenService } from '@bufbuild/protobuf/codegenv2';
+import { ConnectError, createClient as createConnectClient, type Client, type Interceptor } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
 
 import { logger } from '../shared/monitoring/index.js';
@@ -50,14 +50,14 @@ const SERVICE_TYPE_NAME_MAPPING: Record<string, string> = {
  * 
  * @param service - The service definition (from generated proto)
  * @param config - Configuration options
- * @returns A PromiseClient for the service
+ * @returns A Client for the service
  */
-export function createClient<T extends ServiceType>(
+export function createClient<T extends GenService<any>>(
   service: T,
   config: GRPCConfig = {}
-): PromiseClient<T> {
+): Client<T> {
   if (config.transport) {
-    return createPromiseClient(service, config.transport);
+    return createConnectClient(service, config.transport);
   }
 
   // Default configuration: mainnet.zerascan.io over HTTPS (443)
@@ -250,5 +250,5 @@ export function createClient<T extends ServiceType>(
     } as T;
   }
 
-  return createPromiseClient(finalService, transport);
+  return createConnectClient(finalService, transport);
 }

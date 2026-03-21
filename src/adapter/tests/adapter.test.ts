@@ -4,8 +4,19 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { CoinTXN, GovernanceVote } from '../../../proto/generated/txn_pb.js';
+import { create } from '@bufbuild/protobuf';
+
 import {
+  CoinTXNSchema,
+  GovernanceVoteSchema,
+  BaseTXNSchema,
+  SmartContractExecuteTXNSchema,
+  InstrumentContractSchema,
+  ContractUpdateTXNSchema
+} from '../../../proto/generated/txn_pb.js';
+import type {
+  CoinTXN,
+  GovernanceVote,
   BaseTXN,
   SmartContractExecuteTXN,
   InstrumentContract,
@@ -121,7 +132,7 @@ describe('Custom ZeraSigner', () => {
 
 describe('Serialization', () => {
   it('should serialize and deserialize a CoinTXN roundtrip', () => {
-    const txn = new CoinTXN({
+    const txn = create(CoinTXNSchema, {
       contractId: '$ZRA+0000'
     });
 
@@ -134,12 +145,12 @@ describe('Serialization', () => {
     expect(envelope.data.length).toBeGreaterThan(0);
 
     const restored = deserializeTransaction(envelope) as CoinTXN;
-    expect(restored).toBeInstanceOf(CoinTXN);
+    expect((restored as any).$typeName).toBe('zera_txn.CoinTXN');
     expect(restored.contractId).toBe('$ZRA+0000');
   });
 
   it('should serialize and deserialize GovernanceVote (proving universality)', () => {
-    const vote = new GovernanceVote({
+    const vote = create(GovernanceVoteSchema, {
       contractId: '$ZRA+0000'
     });
 
@@ -147,12 +158,12 @@ describe('Serialization', () => {
     expect(envelope.type).toBe('zera_txn.GovernanceVote');
 
     const restored = deserializeTransaction(envelope) as GovernanceVote;
-    expect(restored).toBeInstanceOf(GovernanceVote);
+    expect((restored as any).$typeName).toBe('zera_txn.GovernanceVote');
     expect(restored.contractId).toBe('$ZRA+0000');
   });
 
   it('should deserialize from a JSON string', () => {
-    const txn = new CoinTXN({
+    const txn = create(CoinTXNSchema, {
       contractId: '$TEST+0001'
     });
 
@@ -160,7 +171,7 @@ describe('Serialization', () => {
     const json = JSON.stringify(envelope);
 
     const restored = deserializeTransaction(json) as CoinTXN;
-    expect(restored).toBeInstanceOf(CoinTXN);
+    expect((restored as any).$typeName).toBe('zera_txn.CoinTXN');
     expect(restored.contractId).toBe('$TEST+0001');
   });
 
@@ -339,8 +350,8 @@ describe('signAndFinalize — roundtrip', () => {
     const signer = new KeyPairSigner(publicKey, privateKey);
 
     // Construct a minimal GovernanceVote with a base
-    const base = new BaseTXN({ feeAmount: '1', feeId: '$ZRA+0000' });
-    const vote = new GovernanceVote({ base, contractId: '$ZRA+0000', support: true });
+    const base = create(BaseTXNSchema, { feeAmount: '1', feeId: '$ZRA+0000' });
+    const vote = create(GovernanceVoteSchema, { base, contractId: '$ZRA+0000', support: true });
 
     // Before signing: no signature, no hash
     expect(vote.base?.signature).toBeUndefined();
@@ -359,8 +370,8 @@ describe('signAndFinalize — roundtrip', () => {
     const { publicKey, privateKey } = getTestKeyPair();
     const signer = new KeyPairSigner(publicKey, privateKey);
 
-    const base = new BaseTXN({ feeAmount: '1', feeId: '$ZRA+0000' });
-    const exec = new SmartContractExecuteTXN({
+    const base = create(BaseTXNSchema, { feeAmount: '1', feeId: '$ZRA+0000' });
+    const exec = create(SmartContractExecuteTXNSchema, {
       base, smartContractName: 'test', function: 'call', instance: 0
     });
 
@@ -376,8 +387,8 @@ describe('signAndFinalize — roundtrip', () => {
     const { publicKey, privateKey } = getTestKeyPair();
     const signer = new KeyPairSigner(publicKey, privateKey);
 
-    const base = new BaseTXN({ feeAmount: '1', feeId: '$ZRA+0000' });
-    const contract = new InstrumentContract({
+    const base = create(BaseTXNSchema, { feeAmount: '1', feeId: '$ZRA+0000' });
+    const contract = create(InstrumentContractSchema, {
       base, symbol: 'TST', name: 'Test', contractId: '$TST+0000'
     });
 
@@ -392,8 +403,8 @@ describe('signAndFinalize — roundtrip', () => {
     const { publicKey, privateKey } = getTestKeyPair();
     const signer = new KeyPairSigner(publicKey, privateKey);
 
-    const base = new BaseTXN({ feeAmount: '1', feeId: '$ZRA+0000' });
-    const update = new ContractUpdateTXN({
+    const base = create(BaseTXNSchema, { feeAmount: '1', feeId: '$ZRA+0000' });
+    const update = create(ContractUpdateTXNSchema, {
       base, contractId: '$TST+0000', contractVersion: BigInt(1)
     });
 

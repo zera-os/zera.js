@@ -8,7 +8,7 @@ import { NetworkError } from './src/types/index.js';
 
 // Mock @connectrpc/connect and @connectrpc/connect-web
 vi.mock('@connectrpc/connect', () => ({
-  createPromiseClient: vi.fn(() => ({
+  createClient: vi.fn(() => ({
     // Mock Transaction Service methods
     coin: vi.fn().mockResolvedValue({}),
     governVote: vi.fn().mockResolvedValue({}),
@@ -37,7 +37,7 @@ vi.mock('@connectrpc/connect', () => ({
       ]
     })
   })),
-  PromiseClient: {}
+  Client: {}
 }));
 
 vi.mock('@connectrpc/connect-web', () => ({

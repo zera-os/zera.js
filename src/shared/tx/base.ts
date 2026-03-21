@@ -2,10 +2,11 @@
  * Shared utilities for standard (non-CoinTXN) transactions
  */
 
-import { protoInt64 } from '@bufbuild/protobuf';
+import { protoInt64, create } from '@bufbuild/protobuf';
 
-import { Timestamp } from '../../../proto/generated/google/protobuf/timestamp_pb.js';
-import { BaseTXN, PublicKey } from '../../../proto/generated/txn_pb.js';
+import { TimestampSchema } from '../../../proto/generated/google/protobuf/timestamp_pb.js';
+import { BaseTXNSchema, PublicKeySchema } from '../../../proto/generated/txn_pb.js';
+import type { BaseTXN } from '../../../proto/generated/txn_pb.js';
 import { getNonce as fetchNonce } from '../../api/handler/nonce/service.js';
 import { generateAddressFromPublicKey, getPublicKeyBytes } from '../../shared/crypto/address-utils.js';
 import type { GRPCConfig } from '../../types/index.js';
@@ -30,16 +31,16 @@ export function buildStandardBaseTXN(
   }
 
   const now = new Date();
-  const timestamp = new Timestamp({
+  const timestamp = create(TimestampSchema, {
     seconds: protoInt64.parse(Math.floor(now.getTime() / 1000)),
     nanos: (now.getTime() % 1000) * 1000000
   });
 
-  const publicKey = new PublicKey({
+  const publicKey = create(PublicKeySchema, {
     single: new Uint8Array(getPublicKeyBytes(publicKeyId))
   });
 
-  const base: Partial<BaseTXN> = {
+  const base: Record<string, unknown> = {
     publicKey,
     timestamp,
     feeAmount: String(finalFeeAmount),
@@ -48,7 +49,7 @@ export function buildStandardBaseTXN(
   };
   if (memo && memo.trim() !== '') base.memo = memo;
 
-  return new BaseTXN(base);
+  return create(BaseTXNSchema, base);
 }
 
 /**
@@ -63,5 +64,3 @@ export async function getAddressAndNonce(
   const nonce = protoInt64.uParse(nonceDecimal.toString());
   return { address, nonce };
 }
-
-

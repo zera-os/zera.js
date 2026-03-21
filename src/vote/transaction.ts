@@ -7,9 +7,10 @@
  * `createVoteTXN()` is a convenience wrapper: build + sign with private key.
  */
 
-import { protoInt64 } from '@bufbuild/protobuf';
+import { protoInt64, create } from '@bufbuild/protobuf';
 
-import { GovernanceVote } from '../../proto/generated/txn_pb.js';
+import { GovernanceVoteSchema } from '../../proto/generated/txn_pb.js';
+import type { GovernanceVote } from '../../proto/generated/txn_pb.js';
 import { createTransactionClient } from '../grpc/transaction/transaction-client.js';
 import { UniversalFeeCalculator, type FeeConfigHelper } from '../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../shared/monitoring/index.js';
@@ -118,12 +119,11 @@ export async function buildVoteTXN(
   if (feeAmountParts !== undefined) baseParams.feeAmountParts = feeAmountParts;
   const base = buildStandardBaseTXN(baseParams);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const voteData: Partial<GovernanceVote> = { base, contractId, proposalId: proposalBytes as any };
+  const voteData: Record<string, unknown> = { base, contractId, proposalId: proposalBytes };
   if (hasSupport && options.support !== undefined) voteData.support = options.support;
   if (hasSupportOption && options.supportOption !== undefined) voteData.supportOption = options.supportOption;
 
-  const voteTxn = new GovernanceVote(voteData);
+  const voteTxn = create(GovernanceVoteSchema, voteData);
   const effectiveFeeId = feeId || '$ZRA+0000';
 
   const feeOptions: FeeConfigHelper<GovernanceVote> = {

@@ -18,13 +18,14 @@
 
 import { Connection, Keypair, sendAndConfirmTransaction } from '@solana/web3.js';
 
-import { GuardianService } from '../../../../../proto/generated/guardian_connect.js';
+import { GuardianService } from '../../../../../proto/generated/guardian_pb.js';
 import {
-  PayloadRequest,
+  PayloadRequestSchema,
   NETWORK_TYPE,
   type SolanaPayload,
   type ZeraPayload
 } from '../../../../../proto/generated/guardian_pb.js';
+import { create } from '@bufbuild/protobuf';
 import { createClient } from '../../../../grpc/client-factory.js';
 import type { GRPCConfig } from '../../../../types/index.js';
 import {
@@ -235,12 +236,12 @@ export async function fetchSolanaVAA(
   const doFetch = async (): Promise<SolanaPayload> => {
     const client = createClient(GuardianService, guardianConfig);
     
-    const request = new PayloadRequest({
+    const request = create(PayloadRequestSchema, {
       payloadId: txnHash,
       networkType: NETWORK_TYPE.ZERA
     });
     
-    const response = await client.getPayload(request);
+    const response = await client.getPayload(request) as any;
     
     if (response.payload.case !== 'solanaPayload') {
       throw new Error(`Expected Solana payload, got: ${response.payload.case}`);
@@ -280,12 +281,12 @@ export async function fetchZeraVAA(
   const doFetch = async (): Promise<ZeraPayload> => {
     const client = createClient(GuardianService, guardianConfig);
     
-    const request = new PayloadRequest({
+    const request = create(PayloadRequestSchema, {
       payloadId: txSignature,
       networkType: NETWORK_TYPE.SOLANA
     });
     
-    const response = await client.getPayload(request);
+    const response = await client.getPayload(request) as any;
     
     if (response.payload.case !== 'zeraPayload') {
       throw new Error(`Expected ZERA payload, got: ${response.payload.case}`);

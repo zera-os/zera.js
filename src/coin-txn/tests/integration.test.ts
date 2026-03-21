@@ -58,6 +58,7 @@ vi.mock('../../shared/fee-calculators/universal-fee-calculator.js', () => ({
 }));
 
 vi.mock('../../shared/utils/token-info.js', () => ({
+  normalizeContractId: vi.fn((id: string) => id),
   getTokenInfo: vi.fn().mockResolvedValue(new Map([
     ['$ZRA+0000', {
       contractId: '$ZRA+0000',

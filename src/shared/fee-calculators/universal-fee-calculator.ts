@@ -5,7 +5,7 @@
 
 import bs58 from 'bs58';
 
-import {
+import type {
   CoinTXN,
   MintTXN,
   ItemizedMintTXN,
@@ -29,9 +29,9 @@ import {
   ValidatorHeartbeat,
   ProposalResult,
   RequiredVersion,
-  CONTRACT_FEE_TYPE,
   ContractFees
 } from '../../../proto/generated/txn_pb.js';
+import { CONTRACT_FEE_TYPE } from '../../../proto/generated/txn_pb.js';
 import type { PublicKey } from '../../../proto/generated/txn_pb.js';
 import { getTokenFeeInfo } from '../../api/handler/token-info/service.js';
 import { getBalance } from '../../api/validator/balance/service.js';
@@ -95,7 +95,7 @@ export type TransactionMessage =
  * Type guard to check if an object is a CoinTXN
  */
 function isCoinTXN(obj: unknown): obj is CoinTXN {
-  return obj instanceof CoinTXN;
+  return !!(obj && typeof obj === 'object' && '$typeName' in obj && (obj as { $typeName: string }).$typeName === 'zera_txn.CoinTXN');
 }
 
 /**
@@ -198,29 +198,30 @@ export interface FeeConfigHelper<T extends TransactionMessage = TransactionMessa
  */
 function extractTransactionTypeFromProtoObject(protoObject: TransactionMessage): number {
   try {
-    if (protoObject instanceof CoinTXN) return TRANSACTION_TYPE.COIN_TYPE;
-    if (protoObject instanceof MintTXN) return TRANSACTION_TYPE.MINT_TYPE;
-    if (protoObject instanceof ItemizedMintTXN) return TRANSACTION_TYPE.ITEM_MINT_TYPE;
-    if (protoObject instanceof InstrumentContract) return TRANSACTION_TYPE.CONTRACT_TXN_TYPE;
-    if (protoObject instanceof GovernanceVote) return TRANSACTION_TYPE.VOTE_TYPE;
-    if (protoObject instanceof GovernanceProposal) return TRANSACTION_TYPE.PROPOSAL_TYPE;
-    if (protoObject instanceof SmartContractTXN) return TRANSACTION_TYPE.SMART_CONTRACT_TYPE;
-    if (protoObject instanceof SmartContractExecuteTXN) return TRANSACTION_TYPE.SMART_CONTRACT_EXECUTE_TYPE;
-    if (protoObject instanceof ExpenseRatioTXN) return TRANSACTION_TYPE.EXPENSE_RATIO_TYPE;
-    if (protoObject instanceof NFTTXN) return TRANSACTION_TYPE.NFT_TYPE;
-    if (protoObject instanceof ContractUpdateTXN) return TRANSACTION_TYPE.UPDATE_CONTRACT_TYPE;
-    if (protoObject instanceof ValidatorRegistration) return TRANSACTION_TYPE.VALIDATOR_REGISTRATION_TYPE;
-    if (protoObject instanceof ValidatorHeartbeat) return TRANSACTION_TYPE.VALIDATOR_HEARTBEAT_TYPE;
-    if (protoObject instanceof ProposalResult) return TRANSACTION_TYPE.PROPOSAL_RESULT_TYPE;
-    if (protoObject instanceof DelegatedTXN) return TRANSACTION_TYPE.DELEGATED_VOTING_TYPE;
-    if (protoObject instanceof RevokeTXN) return TRANSACTION_TYPE.REVOKE_TYPE;
-    if (protoObject instanceof QuashTXN) return TRANSACTION_TYPE.QUASH_TYPE;
-    if (protoObject instanceof FastQuorumTXN) return TRANSACTION_TYPE.FAST_QUORUM_TYPE;
-    if (protoObject instanceof ComplianceTXN) return TRANSACTION_TYPE.COMPLIANCE_TYPE;
-    if (protoObject instanceof BurnSBTTXN) return TRANSACTION_TYPE.SBT_BURN_TYPE;
-    if (protoObject instanceof RequiredVersion) return TRANSACTION_TYPE.REQUIRED_VERSION;
-    if (protoObject instanceof SmartContractInstantiateTXN) return TRANSACTION_TYPE.SMART_CONTRACT_INSTANTIATE_TYPE;
-    if (protoObject instanceof AllowanceTXN) return TRANSACTION_TYPE.ALLOWANCE_TYPE;
+    const typeName = (protoObject as { $typeName?: string }).$typeName;
+    if (typeName === 'zera_txn.CoinTXN') return TRANSACTION_TYPE.COIN_TYPE;
+    if (typeName === 'zera_txn.MintTXN') return TRANSACTION_TYPE.MINT_TYPE;
+    if (typeName === 'zera_txn.ItemizedMintTXN') return TRANSACTION_TYPE.ITEM_MINT_TYPE;
+    if (typeName === 'zera_txn.InstrumentContract') return TRANSACTION_TYPE.CONTRACT_TXN_TYPE;
+    if (typeName === 'zera_txn.GovernanceVote') return TRANSACTION_TYPE.VOTE_TYPE;
+    if (typeName === 'zera_txn.GovernanceProposal') return TRANSACTION_TYPE.PROPOSAL_TYPE;
+    if (typeName === 'zera_txn.SmartContractTXN') return TRANSACTION_TYPE.SMART_CONTRACT_TYPE;
+    if (typeName === 'zera_txn.SmartContractExecuteTXN') return TRANSACTION_TYPE.SMART_CONTRACT_EXECUTE_TYPE;
+    if (typeName === 'zera_txn.ExpenseRatioTXN') return TRANSACTION_TYPE.EXPENSE_RATIO_TYPE;
+    if (typeName === 'zera_txn.NFTTXN') return TRANSACTION_TYPE.NFT_TYPE;
+    if (typeName === 'zera_txn.ContractUpdateTXN') return TRANSACTION_TYPE.UPDATE_CONTRACT_TYPE;
+    if (typeName === 'zera_txn.ValidatorRegistration') return TRANSACTION_TYPE.VALIDATOR_REGISTRATION_TYPE;
+    if (typeName === 'zera_txn.ValidatorHeartbeat') return TRANSACTION_TYPE.VALIDATOR_HEARTBEAT_TYPE;
+    if (typeName === 'zera_txn.ProposalResult') return TRANSACTION_TYPE.PROPOSAL_RESULT_TYPE;
+    if (typeName === 'zera_txn.DelegatedTXN') return TRANSACTION_TYPE.DELEGATED_VOTING_TYPE;
+    if (typeName === 'zera_txn.RevokeTXN') return TRANSACTION_TYPE.REVOKE_TYPE;
+    if (typeName === 'zera_txn.QuashTXN') return TRANSACTION_TYPE.QUASH_TYPE;
+    if (typeName === 'zera_txn.FastQuorumTXN') return TRANSACTION_TYPE.FAST_QUORUM_TYPE;
+    if (typeName === 'zera_txn.ComplianceTXN') return TRANSACTION_TYPE.COMPLIANCE_TYPE;
+    if (typeName === 'zera_txn.BurnSBTTXN') return TRANSACTION_TYPE.SBT_BURN_TYPE;
+    if (typeName === 'zera_txn.RequiredVersion') return TRANSACTION_TYPE.REQUIRED_VERSION;
+    if (typeName === 'zera_txn.SmartContractInstantiateTXN') return TRANSACTION_TYPE.SMART_CONTRACT_INSTANTIATE_TYPE;
+    if (typeName === 'zera_txn.AllowanceTXN') return TRANSACTION_TYPE.ALLOWANCE_TYPE;
     
     // If we can't determine the type, throw an error
     throw new Error('Unable to determine transaction type from protoObject structure');

@@ -7,9 +7,10 @@
  * `createSmartContractExecuteTXN()` is a convenience wrapper: build + sign with private key.
  */
 
-import { protoInt64 } from '@bufbuild/protobuf';
+import { protoInt64, create } from '@bufbuild/protobuf';
 
-import { SmartContractExecuteTXN, Parameters } from '../../../proto/generated/txn_pb.js';
+import { SmartContractExecuteTXNSchema, ParametersSchema } from '../../../proto/generated/txn_pb.js';
+import type { SmartContractExecuteTXN, Parameters } from '../../../proto/generated/txn_pb.js';
 import { validateKeyPair } from '../../contract/shared/utils.js';
 import { createTransactionClient } from '../../grpc/transaction/transaction-client.js';
 import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
@@ -162,14 +163,14 @@ export async function buildSmartContractExecuteTXN(
 
   const protoParameters = parameters.map((p: ExecuteParameter) => {
     const value = toParameterBytes(p.value);
-    return new Parameters({ value, type: p.type });
+    return create(ParametersSchema, { value, type: p.type });
   });
 
-  const executeData: Partial<SmartContractExecuteTXN> = {
+  const executeData: Record<string, unknown> = {
     base, smartContractName, function: functionName,
     instance: instance || 0, parameters: protoParameters
   };
-  const executeTxn = new SmartContractExecuteTXN(executeData);
+  const executeTxn = create(SmartContractExecuteTXNSchema, executeData);
   const effectiveFeeId = feeId || '$ZRA+0000';
 
   const feeOptions: FeeConfigHelper<SmartContractExecuteTXN> = {
