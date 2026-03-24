@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  The JavaScript SDK for the ZERA Network
+  The Leading JavaScript SDK for the ZERA Network
 </p>
 
 <p align="center">
