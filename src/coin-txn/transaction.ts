@@ -404,7 +404,7 @@ export async function buildCoinTXN(
   // Sanitize
   const sanitizedData = sanitizeProtobufObject(coinTxn, { removeEmptyFields: true });
   if (!sanitizedData) throw new Error('Failed to sanitize transaction object');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   coinTxn = create(CoinTXNSchema, sanitizedData);
 
   // Return unsigned — no signatures, no hash

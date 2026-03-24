@@ -1,8 +1,8 @@
-import type { Client } from '@connectrpc/connect';
 import { create } from '@bufbuild/protobuf';
+import type { Client } from '@connectrpc/connect';
 
-import { APIService } from '../../../proto/generated/api_pb.js';
 import type { TokenFeeInfoResponse, NonceResponse, BalanceResponse, BaseFeeResponse } from '../../../proto/generated/api_pb.js';
+import { APIService } from '../../../proto/generated/api_pb.js';
 import { NonceRequestSchema, TokenFeeInfoRequestSchema, BalanceRequestSchema, BaseFeeRequestSchema } from '../../../proto/generated/api_pb.js';
 import type { PublicKey } from '../../../proto/generated/txn_pb.js';
 import { TRANSACTION_TYPE } from '../../../proto/generated/txn_pb.js';

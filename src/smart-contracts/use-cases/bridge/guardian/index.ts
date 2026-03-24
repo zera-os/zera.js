@@ -100,7 +100,7 @@ export type {
   
   // Utility types
   CreateSolanaContract,
-  ExistingContracts,
+  ExistingContracts
 } from '../../../../../proto/generated/guardian_pb.js';
 
 export {

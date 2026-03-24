@@ -12,7 +12,6 @@
  */
 
 import { type Message, type DescMessage, toBinary, fromBinary } from '@bufbuild/protobuf';
-import type { GenMessage } from '@bufbuild/protobuf/codegenv2';
 
 import * as txn_pb from '../../proto/generated/txn_pb.js';
 

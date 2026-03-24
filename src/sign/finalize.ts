@@ -35,6 +35,7 @@ function messageToBytes(msg: unknown): Uint8Array {
   if (typedMsg.$typeName) {
     const schema = getSchemaForTypeName(typedMsg.$typeName);
     if (schema) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return toBinary(schema as any, msg as any);
     }
   }

@@ -16,6 +16,7 @@
  * - `submitVAAToZera` - Fetch VAA + build tx + submit to ZERA
  */
 
+import { create } from '@bufbuild/protobuf';
 import { Connection, Keypair, sendAndConfirmTransaction } from '@solana/web3.js';
 
 import { GuardianService } from '../../../../../proto/generated/guardian_pb.js';
@@ -25,7 +26,6 @@ import {
   type SolanaPayload,
   type ZeraPayload
 } from '../../../../../proto/generated/guardian_pb.js';
-import { create } from '@bufbuild/protobuf';
 import { createClient } from '../../../../grpc/client-factory.js';
 import type { GRPCConfig } from '../../../../types/index.js';
 import {
@@ -241,6 +241,7 @@ export async function fetchSolanaVAA(
       networkType: NETWORK_TYPE.ZERA
     });
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await client.getPayload(request) as any;
     
     if (response.payload.case !== 'solanaPayload') {
@@ -286,6 +287,7 @@ export async function fetchZeraVAA(
       networkType: NETWORK_TYPE.SOLANA
     });
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = await client.getPayload(request) as any;
     
     if (response.payload.case !== 'zeraPayload') {

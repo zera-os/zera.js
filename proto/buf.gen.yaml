@@ -9,6 +9,7 @@ managed:
       module: buf.build/googleapis/googleapis
 plugins:
   # Generate JavaScript runtime files with TypeScript declarations
+  # v2 protoc-gen-es generates messages, enums, services, and schemas natively
   - local: protoc-gen-es
     out: generated
     opt: 

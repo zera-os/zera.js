@@ -10,7 +10,7 @@
 import { protoInt64, create } from '@bufbuild/protobuf';
 
 import { SmartContractExecuteTXNSchema, ParametersSchema } from '../../../proto/generated/txn_pb.js';
-import type { SmartContractExecuteTXN, Parameters } from '../../../proto/generated/txn_pb.js';
+import type { SmartContractExecuteTXN } from '../../../proto/generated/txn_pb.js';
 import { validateKeyPair } from '../../contract/shared/utils.js';
 import { createTransactionClient } from '../../grpc/transaction/transaction-client.js';
 import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';

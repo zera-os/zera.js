@@ -24,11 +24,35 @@ const errorNormalizer: Interceptor = (next) => async (req) => {
       const readable = new Error(
         `gRPC ${req.method.name} failed: [${err.code}] ${err.rawMessage || err.message}`
       );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (readable as any).cause = err;  // preserve original for deep inspection
       throw readable;
     }
     throw err;
   }
+};
+
+/**
+ * URL Rewriter Interceptor.
+ *
+ * In @connectrpc/connect v2, the request URL is built using `method.parent.typeName`.
+ * Shallow cloning `service.typeName` no longer works. This interceptor explicitly
+ * rewrites the outgoing request URL to match the Envoy paths expected by the ZERA backend.
+ */
+const urlRewriter: Interceptor = (next) => async (req) => {
+  let rewrittenUrl = req.url;
+  for (const [originalPath, newPath] of Object.entries(SERVICE_TYPE_NAME_MAPPING)) {
+    const searchString = `/${originalPath}/`;
+    if (rewrittenUrl.includes(searchString)) {
+      rewrittenUrl = rewrittenUrl.replace(searchString, `/${newPath}/`);
+      break;
+    }
+  }
+  
+  if (rewrittenUrl !== req.url) {
+    return next({ ...req, url: rewrittenUrl });
+  }
+  return next(req);
 };
 
 /**
@@ -52,6 +76,7 @@ const SERVICE_TYPE_NAME_MAPPING: Record<string, string> = {
  * @param config - Configuration options
  * @returns A Client for the service
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function createClient<T extends GenService<any>>(
   service: T,
   config: GRPCConfig = {}
@@ -235,20 +260,10 @@ export function createClient<T extends GenService<any>>(
   const transport = createGrpcWebTransport({
     baseUrl,
     useBinaryFormat: true,
-    interceptors: [errorNormalizer],
+    interceptors: [errorNormalizer, urlRewriter],
     // Use custom fetch wrapper for all client-side environments (RN + Web)
     fetch: !isNodeJs ? createGrpcWebFetch() : retryingFetch
   });
 
-  // Apply service name mapping if applicable
-  let finalService = service;
-  if (service.typeName in SERVICE_TYPE_NAME_MAPPING) {
-    // Create a shallow copy with the modified typeName to match Envoy rewriting rules
-    finalService = { 
-      ...service, 
-      typeName: SERVICE_TYPE_NAME_MAPPING[service.typeName] 
-    } as T;
-  }
-
-  return createConnectClient(finalService, transport);
+  return createConnectClient(service, transport);
 }

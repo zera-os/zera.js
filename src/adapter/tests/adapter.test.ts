@@ -2,9 +2,9 @@
  * Wallet Adapter - Unit Tests
  */
 
+import { create } from '@bufbuild/protobuf';
 import { describe, it, expect } from 'vitest';
 
-import { create } from '@bufbuild/protobuf';
 
 import {
   CoinTXNSchema,

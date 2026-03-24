@@ -5,9 +5,9 @@
  * Contains all business logic for balance operations.
  */
 
+import { create } from '@bufbuild/protobuf';
 import Decimal from 'decimal.js';
 
-import { create } from '@bufbuild/protobuf';
 
 import { BalanceResponseSchema } from '../../../../proto/generated/api_pb.js';
 import type { BalanceResponse } from '../../../../proto/generated/api_pb.js';

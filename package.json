@@ -45,6 +45,8 @@
     "test:grpc": "vitest run src/grpc/**/*.test.ts",
     "test:grpc:watch": "vitest src/grpc/**/*.test.ts",
     "test:grpc:coverage": "vitest run --coverage src/grpc/**/*.test.ts",
+    "test:connectrpc": "vitest run src/grpc/tests/connectrpc-live.test.ts --reporter=verbose",
+    "test:connectrpc:watch": "vitest src/grpc/tests/connectrpc-live.test.ts",
     "test:shared": "vitest run src/shared/**/*.test.ts",
     "test:shared:watch": "vitest src/shared/**/*.test.ts",
     "test:shared:coverage": "vitest run --coverage src/shared/**/*.test.ts",

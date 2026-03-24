@@ -3,8 +3,10 @@
  * Handles network fees (base fees), contract-specific fees, and interface fees with automatic or manual specification
  */
 
+import { toBinary } from '@bufbuild/protobuf';
 import bs58 from 'bs58';
 
+import { CONTRACT_FEE_TYPE } from '../../../proto/generated/txn_pb.js';
 import type {
   CoinTXN,
   MintTXN,
@@ -31,8 +33,8 @@ import type {
   RequiredVersion,
   ContractFees
 } from '../../../proto/generated/txn_pb.js';
-import { CONTRACT_FEE_TYPE } from '../../../proto/generated/txn_pb.js';
 import type { PublicKey } from '../../../proto/generated/txn_pb.js';
+import { getSchemaForTypeName } from '../../adapter/serialization.js';
 import { getTokenFeeInfo } from '../../api/handler/token-info/service.js';
 import { getBalance } from '../../api/validator/balance/service.js';
 import { getBaseFee } from '../../api/validator/base-fee/service.js';
@@ -333,9 +335,17 @@ function calculateTotalTransactionSize(protoObject: TransactionMessage): number 
     throw new Error('detectedTransactionType is null or undefined');
   }
   
-  // Get the serialized size of the protobuf object using .toBinary()
+  // Get the serialized size of the protobuf object using v2 schema-based toBinary
+  const typeName = (protoObject as { $typeName?: string }).$typeName;
+  if (!typeName) {
+    throw new Error('Cannot serialize transaction: missing $typeName property');
+  }
+  const schema = getSchemaForTypeName(typeName);
+  if (!schema) {
+    throw new Error(`Cannot serialize transaction: no schema found for type "${typeName}"`);
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const binary = (protoObject as any).toBinary();
+  const binary = toBinary(schema as any, protoObject as any);
   const protoSize = binary.length;
   
   // Auto-detect key types from transaction
