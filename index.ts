@@ -55,7 +55,6 @@ export {
 // Import CoinTXN functionality
 export { 
   createCoinTXN, 
-  sendCoinTXN,
   type CoinTXNInput,
   type CoinTXNOutput,
   type GRPCConfig
@@ -64,7 +63,6 @@ export {
 // Import Smart Contract Execute functionality
 export {
   createSmartContractExecuteTXN,
-  sendSmartContractExecuteTXN,
   type ExecuteParameter,
   type ParameterType,
   ParamType
@@ -89,16 +87,13 @@ export * as staking from './src/smart-contracts/use-cases/staking/index.js';
 // Import Vote functionality
 export {
   createVoteTXN,
-  sendVoteTXN,
   type CreateVoteTXNOptions
 } from './src/vote/index.js';
 
 // Import Contract functionality
 export {
   createContract,
-  sendCreateContract,
   updateContract,
-  sendUpdateContract,
   type CreateContractOptions,
   type UpdateContractOptions
 } from './src/contract/index.js';
@@ -182,6 +177,12 @@ export {
   toSmallestUnits,
   fromSmallestUnits
 } from './src/shared/utils/unified-amount-conversion.js';
+
+// Universal transaction submission (routes any protobuf TXN to the correct RPC method)
+export {
+  submitTransaction,
+  type AnyZeraTransaction
+} from './src/grpc/index.js';
 
 // Export validation utilities
 export {

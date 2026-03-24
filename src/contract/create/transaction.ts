@@ -11,7 +11,7 @@ import { protoInt64, create } from '@bufbuild/protobuf';
 
 import { InstrumentContractSchema } from '../../../proto/generated/txn_pb.js';
 import type { InstrumentContract } from '../../../proto/generated/txn_pb.js';
-import { createTransactionClient } from '../../grpc/transaction/transaction-client.js';
+import { submitTransaction } from '../../grpc/transaction/transaction-client.js';
 import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
 import { UniversalFeeCalculator, type FeeConfigHelper } from '../../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../../shared/monitoring/index.js';
@@ -152,8 +152,7 @@ export async function sendCreateContract(
   contract: InstrumentContract,
   grpcConfig: GRPCConfig = {}
 ): Promise<string> {
-  const client = createTransactionClient(grpcConfig);
-  await client.submitContract(contract);
+  await submitTransaction(contract, grpcConfig);
   return contract.base?.hash
     ? Array.from(contract.base.hash).map(b => b.toString(16).padStart(2, '0')).join('')
     : 'Contract submitted (no hash available)';

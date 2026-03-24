@@ -11,7 +11,7 @@ import { protoInt64, create } from '@bufbuild/protobuf';
 
 import { ContractUpdateTXNSchema } from '../../../proto/generated/txn_pb.js';
 import type { ContractUpdateTXN } from '../../../proto/generated/txn_pb.js';
-import { createTransactionClient } from '../../grpc/transaction/transaction-client.js';
+import { submitTransaction } from '../../grpc/transaction/transaction-client.js';
 import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
 import { UniversalFeeCalculator, type FeeConfigHelper } from '../../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../../shared/monitoring/index.js';
@@ -137,8 +137,7 @@ export async function sendUpdateContract(
   update: ContractUpdateTXN,
   grpcConfig: GRPCConfig = {}
 ): Promise<string> {
-  const client = createTransactionClient(grpcConfig);
-  await client.submitContractUpdate(update);
+  await submitTransaction(update, grpcConfig);
   return update.base?.hash
     ? Array.from(update.base.hash).map(b => b.toString(16).padStart(2, '0')).join('')
     : 'Contract update submitted (no hash available)';

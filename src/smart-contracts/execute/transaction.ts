@@ -12,7 +12,6 @@ import { protoInt64, create } from '@bufbuild/protobuf';
 import { SmartContractExecuteTXNSchema, ParametersSchema } from '../../../proto/generated/txn_pb.js';
 import type { SmartContractExecuteTXN } from '../../../proto/generated/txn_pb.js';
 import { validateKeyPair } from '../../contract/shared/utils.js';
-import { createTransactionClient } from '../../grpc/transaction/transaction-client.js';
 import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
 import { UniversalFeeCalculator, type FeeConfigHelper } from '../../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../../shared/monitoring/index.js';
@@ -224,9 +223,6 @@ export async function createSmartContractExecuteTXN(
 // ============================================================================
 
 export async function sendSmartContractExecuteTXN(txn: SmartContractExecuteTXN, grpcConfig: GRPCConfig = {}): Promise<string> {
-  const client = createTransactionClient(grpcConfig);
-  await client.submitSmartContractExecute(txn);
-  return txn.base?.hash
-    ? Array.from(txn.base.hash).map(b => b.toString(16).padStart(2, '0')).join('')
-    : 'SmartContractExecute submitted (no hash available)';
+  const { submitTransaction } = await import('../../grpc/transaction/transaction-client.js');
+  return submitTransaction(txn, grpcConfig);
 }

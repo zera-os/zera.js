@@ -39,7 +39,6 @@ import type {
   PublicKey
 } from '../../proto/generated/txn_pb.js';
 import { getNonces } from '../api/handler/nonce/service.js';
-import { createTransactionClient } from '../grpc/transaction/transaction-client.js';
 import { getPublicKeyBytes, generateAddressFromPublicKey, sanitizeAndDecodeAddress } from '../shared/crypto/address-utils.js';
 import { createTransactionHash } from '../shared/crypto/signature-utils.js';
 import { UniversalFeeCalculator, type FeeConfig, type FeeConfigHelper } from '../shared/fee-calculators/universal-fee-calculator.js';
@@ -306,10 +305,6 @@ function createTransferAuth(
   return create(TransferAuthenticationSchema, authData);
 }
 
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 // ============================================================================
 // PUBLIC API — BUILD UNSIGNED
 // ============================================================================
@@ -477,17 +472,6 @@ export async function createCoinTXN(
  * Sends a CoinTXN transaction to the ZERA Network via gRPC.
  */
 export async function sendCoinTXN(coinTxn: CoinTXN, grpcConfig: GRPCConfig = {}): Promise<string> {
-  try {
-    const client = createTransactionClient(grpcConfig);
-    const _response = await client.submitCoinTransaction(coinTxn);
-
-    return coinTxn.base?.hash ?
-      toHex(coinTxn.base.hash) :
-      'Transaction sent successfully (no hash available)';
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Failed to submit coin transaction: ${(error as Error).message}`);
-  }
+  const { submitTransaction } = await import('../grpc/transaction/transaction-client.js');
+  return submitTransaction(coinTxn, grpcConfig);
 }

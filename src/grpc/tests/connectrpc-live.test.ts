@@ -142,10 +142,13 @@ describe('ConnectRPC Connectivity — APIService', () => {
 // TXNService — transport connectivity (no real transactions submitted)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe('ConnectRPC Connectivity — TXNService', () => {
-  it('Coin (empty txn → server reachable)', () => {
-    const txnClient = createClient(TXNService, MAINNET_GRPC_CONFIG);
-    return assertConnects(() => txnClient.coin(create(CoinTXNSchema, {})), 'TXNService.Coin');
+describe('ConnectRPC Connectivity — submitTransaction (universal)', () => {
+  it('routes CoinTXN via submitTransaction', async () => {
+    const { submitTransaction } = await import('../transaction/transaction-client.js');
+    await assertConnects(
+      () => submitTransaction(create(CoinTXNSchema, {}), MAINNET_GRPC_CONFIG),
+      'submitTransaction(CoinTXN)'
+    );
   }, 15_000);
 });
 
