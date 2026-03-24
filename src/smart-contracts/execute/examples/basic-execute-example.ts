@@ -6,7 +6,7 @@
  * when omitted.
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS } from '../../../test-utils/index.js';
 import { createSmartContractExecuteTXN, sendSmartContractExecuteTXN, type ExecuteParameter, ParamType } from '../index.js';
 
@@ -27,10 +27,10 @@ async function exampleExecuteNoParams() {
     [],
     publicKeyId,
     privateKeyBase58,
-    { memo: 'test no params', gasFeeInUsd: 0.05, grpcConfig: PROTONET_GRPC_CONFIG }
+    { memo: 'test no params', gasFeeInUsd: 0.05, grpcConfig: MAINNET_GRPC_CONFIG }
   );
 
-  const hash = await sendSmartContractExecuteTXN(txn, PROTONET_GRPC_CONFIG);
+  const hash = await sendSmartContractExecuteTXN(txn, MAINNET_GRPC_CONFIG);
   console.log('Submitted SmartContractExecute. Hash:', hash);
 }
 
@@ -49,10 +49,10 @@ async function exampleExecuteWithParams() {
     params,
     publicKeyId,
     privateKeyBase58,
-    { memo: 'test params', gasFeeInUsd: 0.50, grpcConfig: PROTONET_GRPC_CONFIG }
+    { memo: 'test params', gasFeeInUsd: 0.50, grpcConfig: MAINNET_GRPC_CONFIG }
   );
 
-  const hash = await sendSmartContractExecuteTXN(txn, PROTONET_GRPC_CONFIG);
+  const hash = await sendSmartContractExecuteTXN(txn, MAINNET_GRPC_CONFIG);
   console.log('Submitted SmartContractExecute. Hash:', hash);
 }
 
@@ -77,11 +77,11 @@ async function exampleExplicitFee() {
       gasFeeInUsd: 0.05,
       feeId: '$ZRA+0000',
       feeAmountParts: '1000000000000000',
-      grpcConfig: PROTONET_GRPC_CONFIG
+      grpcConfig: MAINNET_GRPC_CONFIG
     }
   );
 
-  const hash = await sendSmartContractExecuteTXN(txn, PROTONET_GRPC_CONFIG);
+  const hash = await sendSmartContractExecuteTXN(txn, MAINNET_GRPC_CONFIG);
   console.log('Submitted SmartContractExecute. Hash:', hash);
 }
 
@@ -105,11 +105,11 @@ async function exampleWithGasFee() {
     {
       memo: 'Complex operation with gas fee',
       gasFeeInUsd: 0.05, // 5 cents USD for gas
-      grpcConfig: PROTONET_GRPC_CONFIG
+      grpcConfig: MAINNET_GRPC_CONFIG
     }
   );
 
-  const hash = await sendSmartContractExecuteTXN(txn, PROTONET_GRPC_CONFIG);
+  const hash = await sendSmartContractExecuteTXN(txn, MAINNET_GRPC_CONFIG);
   console.log('Submitted SmartContractExecute with gas fee. Hash:', hash);
 }
 
@@ -135,11 +135,11 @@ async function exampleCustomOverestimate() {
       memo: 'Execute with custom overestimate',
       gasFeeInUsd: 0.05,
       overestimatePercent: 0, // No overestimate buffer on base fee
-      grpcConfig: PROTONET_GRPC_CONFIG
+      grpcConfig: MAINNET_GRPC_CONFIG
     }
   );
 
-  const hash = await sendSmartContractExecuteTXN(txn, PROTONET_GRPC_CONFIG);
+  const hash = await sendSmartContractExecuteTXN(txn, MAINNET_GRPC_CONFIG);
   console.log('Submitted SmartContractExecute (0% overestimate). Hash:', hash);
 }
 
@@ -169,7 +169,7 @@ async function exampleManualNonce() {
     {
       memo: 'Execute with manual nonce',
       gasFeeInUsd: 0.05,
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network fetch
       // WARNING: Not validated! Incorrect nonce will cause transaction failure
       nonce: '10'
@@ -178,7 +178,7 @@ async function exampleManualNonce() {
 
   console.log('Transaction created with manual nonce: 10');
   // Note: This will likely fail if the nonce is incorrect
-  // const hash = await sendSmartContractExecuteTXN(txn, PROTONET_GRPC_CONFIG);
+  // const hash = await sendSmartContractExecuteTXN(txn, MAINNET_GRPC_CONFIG);
   // console.log('Submitted SmartContractExecute. Hash:', hash);
 }
 
@@ -207,7 +207,7 @@ async function exampleFullyOffline() {
     privateKeyBase58,
     {
       memo: 'Fully offline transaction',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network nonce fetch
       nonce: '15',
       // Manual fee - skips fee calculation, used exactly as provided (no overestimation)

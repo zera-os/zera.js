@@ -7,11 +7,11 @@
  * `createSmartContractExecuteTXN()` is a convenience wrapper: build + sign with private key.
  */
 
-import { protoInt64 } from '@bufbuild/protobuf';
+import { protoInt64, create } from '@bufbuild/protobuf';
 
-import { SmartContractExecuteTXN, Parameters } from '../../../proto/generated/txn_pb.js';
+import { SmartContractExecuteTXNSchema, ParametersSchema } from '../../../proto/generated/txn_pb.js';
+import type { SmartContractExecuteTXN } from '../../../proto/generated/txn_pb.js';
 import { validateKeyPair } from '../../contract/shared/utils.js';
-import { createTransactionClient } from '../../grpc/transaction/transaction-client.js';
 import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
 import { UniversalFeeCalculator, type FeeConfigHelper } from '../../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../../shared/monitoring/index.js';
@@ -162,14 +162,14 @@ export async function buildSmartContractExecuteTXN(
 
   const protoParameters = parameters.map((p: ExecuteParameter) => {
     const value = toParameterBytes(p.value);
-    return new Parameters({ value, type: p.type });
+    return create(ParametersSchema, { value, type: p.type });
   });
 
-  const executeData: Partial<SmartContractExecuteTXN> = {
+  const executeData: Record<string, unknown> = {
     base, smartContractName, function: functionName,
     instance: instance || 0, parameters: protoParameters
   };
-  const executeTxn = new SmartContractExecuteTXN(executeData);
+  const executeTxn = create(SmartContractExecuteTXNSchema, executeData);
   const effectiveFeeId = feeId || '$ZRA+0000';
 
   const feeOptions: FeeConfigHelper<SmartContractExecuteTXN> = {
@@ -223,9 +223,6 @@ export async function createSmartContractExecuteTXN(
 // ============================================================================
 
 export async function sendSmartContractExecuteTXN(txn: SmartContractExecuteTXN, grpcConfig: GRPCConfig = {}): Promise<string> {
-  const client = createTransactionClient(grpcConfig);
-  await client.submitSmartContractExecute(txn);
-  return txn.base?.hash
-    ? Array.from(txn.base.hash).map(b => b.toString(16).padStart(2, '0')).join('')
-    : 'SmartContractExecute submitted (no hash available)';
+  const { submitTransaction } = await import('../../grpc/transaction/transaction-client.js');
+  return submitTransaction(txn, grpcConfig);
 }

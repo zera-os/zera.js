@@ -1,5 +1,5 @@
 import { createValidatorAPIClient } from './api/validator-api-client.js';
-import { createTransactionClient } from './transaction/transaction-client.js';
+import { createTransactionClient, submitTransaction } from './transaction/transaction-client.js';
 
 /**
  * gRPC Infrastructure Module
@@ -12,9 +12,11 @@ import { createTransactionClient } from './transaction/transaction-client.js';
 
 // Re-export main functions
 export { createValidatorAPIClient } from './api/validator-api-client.js';
-export { createTransactionClient } from './transaction/transaction-client.js';
+export { createTransactionClient, submitTransaction } from './transaction/transaction-client.js';
+export type { AnyZeraTransaction } from './transaction/transaction-client.js';
 
 export default {
   createValidatorAPIClient,
-  createTransactionClient
+  createTransactionClient,
+  submitTransaction
 };

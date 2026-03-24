@@ -7,14 +7,14 @@
  * `createVoteTXN()` is a convenience wrapper: build + sign with private key.
  */
 
-import { protoInt64 } from '@bufbuild/protobuf';
+import { protoInt64, create } from '@bufbuild/protobuf';
 
-import { GovernanceVote } from '../../proto/generated/txn_pb.js';
-import { createTransactionClient } from '../grpc/transaction/transaction-client.js';
+import { GovernanceVoteSchema } from '../../proto/generated/txn_pb.js';
+import type { GovernanceVote } from '../../proto/generated/txn_pb.js';
 import { UniversalFeeCalculator, type FeeConfigHelper } from '../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../shared/monitoring/index.js';
 import { buildStandardBaseTXN, getAddressAndNonce } from '../shared/tx/base.js';
-import { hexToBytes, bytesToHex } from '../shared/utils/byte-utils.js';
+import { hexToBytes } from '../shared/utils/byte-utils.js';
 import { MAINNET_GRPC_CONFIG } from '../shared/utils/testing-defaults/index.js';
 import { signWithKey } from '../sign/finalize.js';
 import type { GRPCConfig } from '../types/index.js';
@@ -118,12 +118,11 @@ export async function buildVoteTXN(
   if (feeAmountParts !== undefined) baseParams.feeAmountParts = feeAmountParts;
   const base = buildStandardBaseTXN(baseParams);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const voteData: Partial<GovernanceVote> = { base, contractId, proposalId: proposalBytes as any };
+  const voteData: Record<string, unknown> = { base, contractId, proposalId: proposalBytes };
   if (hasSupport && options.support !== undefined) voteData.support = options.support;
   if (hasSupportOption && options.supportOption !== undefined) voteData.supportOption = options.supportOption;
 
-  const voteTxn = new GovernanceVote(voteData);
+  const voteTxn = create(GovernanceVoteSchema, voteData);
   const effectiveFeeId = feeId || '$ZRA+0000';
 
   const feeOptions: FeeConfigHelper<GovernanceVote> = {
@@ -171,7 +170,6 @@ export async function createVoteTXN(
  * Submit a GovernanceVote to the network via gRPC.
  */
 export async function sendVoteTXN(vote: GovernanceVote, grpcConfig: GRPCConfig = {}): Promise<string> {
-  const client = createTransactionClient(grpcConfig);
-  await client.submitGovernanceVote(vote);
-  return vote.base?.hash ? bytesToHex(vote.base.hash) : 'Vote submitted (no hash available)';
+  const { submitTransaction } = await import('../grpc/transaction/transaction-client.js');
+  return submitTransaction(vote, grpcConfig);
 }

@@ -79,17 +79,19 @@ export async function getTokenInfoForSingle(contractId: string, options: GRPCCon
     throw new Error('Contract ID is required');
   }
 
+  const normalized = normalizeContractId(contractId);
+
   try {
-    const response = await getTokenFeeInfo([contractId], options);
-    const tokenInfo = response.tokens.find(t => t.contractId === contractId);
+    const response = await getTokenFeeInfo([normalized], options);
+    const tokenInfo = response.tokens.find(t => t.contractId === normalized || normalizeContractId(t.contractId) === normalized);
     
     if (!tokenInfo) {
-      throw new Error(`Token information not found for contract ID: ${contractId}`);
+      throw new Error(`Token information not found for contract ID: ${normalized}`);
     }
 
     return tokenInfo;
   } catch (error) {
-    throw new Error(`Failed to get token information for ${contractId}: ${(error as Error).message}`);
+    throw new Error(`Failed to get token information for ${normalized}: ${(error as Error).message}`);
   }
 }
 
@@ -152,18 +154,53 @@ export async function getTokenRate(contractId: string, options: GRPCConfig = {})
  * @param options - Optional gRPC configuration
  * @returns Promise with token info map for easy lookups
  */
+/**
+ * Normalize a contract ID to canonical casing.
+ * 
+ * ZERA contract IDs follow specific casing rules:
+ * - Native tokens: `$SYMBOL+DIGITS` → symbol is UPPERCASE (e.g., `$ZRA+0000`)
+ * - Bridged tokens: `$chain-SYMBOL+DIGITS` → chain prefix is lowercase, symbol is UPPERCASE
+ *   (e.g., `$sol-USDC+000000`)
+ * 
+ * This ensures consistent lookups regardless of input casing.
+ */
+export function normalizeContractId(id: string): string {
+  // Bridged token: $chain-SYMBOL+DIGITS
+  const bridgedMatch = id.match(/^(\$)([a-zA-Z]+)(-)([a-zA-Z]+)(\+\d+)$/);
+  if (bridgedMatch) {
+    const [, prefix, chain, sep, symbol, suffix] = bridgedMatch;
+    if (prefix && chain && sep && symbol && suffix) {
+      return `${prefix}${chain.toLowerCase()}${sep}${symbol.toUpperCase()}${suffix}`;
+    }
+  }
+  
+  // Native token: $SYMBOL+DIGITS
+  const nativeMatch = id.match(/^(\$)([a-zA-Z]+)(\+\d+)$/);
+  if (nativeMatch) {
+    const [, prefix, symbol, suffix] = nativeMatch;
+    if (prefix && symbol && suffix) {
+      return `${prefix}${symbol.toUpperCase()}${suffix}`;
+    }
+  }
+  
+  // Unrecognized format — return as-is
+  return id;
+}
+
 export async function getTokenInfo(
   contractId: string,
   additionalContractIds: string[] = [],
   options: GRPCConfig = {}
 ): Promise<Map<string, TokenInfo>> {
+  // Normalize all contract IDs to canonical casing before fetching
+  const normalizedMainId = normalizeContractId(contractId);
   const contractIdsToFetch = new Set<string>();
-  contractIdsToFetch.add(contractId); // Main contract is always needed
+  contractIdsToFetch.add(normalizedMainId);
   
-  // Add any additional contract IDs
+  // Add any additional contract IDs (normalized)
   additionalContractIds.forEach(id => {
     if (id) {
-      contractIdsToFetch.add(id);
+      contractIdsToFetch.add(normalizeContractId(id));
     }
   });
   
@@ -172,6 +209,11 @@ export async function getTokenInfo(
   const tokenInfoMap = new Map<string, TokenInfo>();
   tokensResponse.tokens.forEach(token => {
     tokenInfoMap.set(token.contractId, token);
+    // Also store under the normalized form if it differs from the API-returned ID
+    const normalized = normalizeContractId(token.contractId);
+    if (normalized !== token.contractId) {
+      tokenInfoMap.set(normalized, token);
+    }
   });
   
   // Check for missing tokens and show consolidated warning
@@ -184,7 +226,7 @@ export async function getTokenInfo(
   
   if (missingTokens.length > 0) {
     logger.warn('Token info retrieval failed', {
-      contractId,
+      contractId: normalizedMainId,
       missingTokens,
       operation: 'getTokenInfo'
     });

@@ -45,7 +45,7 @@
 // SERVICE (for use with createClient)
 // ============================================================================
 
-export { GuardianService } from '../../../../../proto/generated/guardian_connect.js';
+export { GuardianService } from '../../../../../proto/generated/guardian_pb.js';
 
 // ============================================================================
 // VAA FUNCTIONS
@@ -72,7 +72,7 @@ export {
 // PROTO TYPES
 // ============================================================================
 
-export {
+export type {
   // Request/Response types
   PayloadRequest,
   PayloadResponse,
@@ -100,8 +100,10 @@ export {
   
   // Utility types
   CreateSolanaContract,
-  ExistingContracts,
-  
+  ExistingContracts
+} from '../../../../../proto/generated/guardian_pb.js';
+
+export {
   // Enums
   NETWORK_TYPE
 } from '../../../../../proto/generated/guardian_pb.js';

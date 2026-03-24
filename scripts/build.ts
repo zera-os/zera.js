@@ -70,15 +70,14 @@ function checkAndFixDependencies(): void {
   
   // Check if protobuf plugins are available
   const protocGenEs = execSilent('protoc-gen-es --version');
-  const protocGenConnectEs = execSilent('protoc-gen-connect-es --version');
   const buf = execSilent('buf --version');
   
-  if (!protocGenEs || !protocGenConnectEs || !buf) {
+  if (!protocGenEs || !buf) {
     log('⚠️  Missing protobuf plugins detected', colors.yellow);
     log('🔧 Installing missing protobuf plugins globally...', colors.cyan);
     
     try {
-      execSync('npm install -g @bufbuild/buf @bufbuild/protoc-gen-es @bufbuild/protoc-gen-connect-es', {
+      execSync('npm install -g @bufbuild/buf @bufbuild/protoc-gen-es', {
         stdio: 'inherit',
         cwd: projectRoot
       });
@@ -86,7 +85,7 @@ function checkAndFixDependencies(): void {
       needsFix = true;
     } catch (error) {
       log('❌ Failed to install protobuf plugins globally', colors.red);
-      log('💡 You may need to run: npm install -g @bufbuild/buf @bufbuild/protoc-gen-es @bufbuild/protoc-gen-connect-es', colors.yellow);
+      log('💡 You may need to run: npm install -g @bufbuild/buf @bufbuild/protoc-gen-es', colors.yellow);
     }
   }
   
@@ -671,9 +670,9 @@ async function build(skipDependencyCheck: boolean = false): Promise<void> {
     lintCode();
     typeCheck();
     compileTypeScript();
+    copyProtoFiles();
     generateESM();
     generateCJS();
-    copyProtoFiles();
     copyReadme();
     copyLicense();
     validateBuild();

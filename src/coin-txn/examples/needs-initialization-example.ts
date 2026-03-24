@@ -10,12 +10,12 @@
  * lets you skip that API call.
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS, TEST_WALLET_ADDRESSES } from '../../test-utils/index.js';
 import { createCoinTXN, sendCoinTXN } from '../index.js';
 
 const contractId = '$ZRA+0000';
-const grpcConfig = PROTONET_GRPC_CONFIG;
+const grpcConfig = MAINNET_GRPC_CONFIG;
 
 /**
  * Example 1: Default behavior (auto-detect)

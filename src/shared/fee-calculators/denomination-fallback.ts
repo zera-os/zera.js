@@ -11,7 +11,7 @@
  * Value: Denomination string (e.g., '1000000000' for 1e9)
  */
 export const DENOMINATION_FALLBACKS: Record<string, string> = {
-  '$ZRA+0000': '1000000000'  // 1e9 (9 decimal places)
+  '$ZRA+0000': '1000000000'
 } as const;
 
 /**

@@ -28,8 +28,8 @@ export {
   VARIABLE_TYPE
 };
 
-// Re-export commonly used protobuf types and schemas
-export {
+// Re-export commonly used protobuf types (type-only since v2 removes classes)
+export type {
   CoinTXN,
   MintTXN,
   ItemizedMintTXN,

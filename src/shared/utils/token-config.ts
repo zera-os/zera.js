@@ -15,7 +15,7 @@
  */
 export const TOKEN_DECIMALS: Record<string, number> = {
   // ZERA Network tokens
-  '$ZRA+0000': 9  // ZERA token (main network token)
+  '$ZRA+0000': 9
 } as const;
 
 /**

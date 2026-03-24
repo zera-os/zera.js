@@ -8,7 +8,9 @@ export default defineConfig({
   
   // Resolve configuration
   resolve: {
+    conditions: ['import'],
     alias: {
+      '@bufbuild/protobuf/codegenv2': resolve(__dirname, './node_modules/@bufbuild/protobuf/dist/esm/codegenv2/index.js'),
       '@': resolve(__dirname, './src'),
       '@types': resolve(__dirname, './src/types'),
       '@wallet': resolve(__dirname, './src/wallet-creation'),
@@ -128,7 +130,7 @@ export default defineConfig({
     
     // Dependency configuration for Node.js modules
     deps: {
-      external: []
+      inline: ['@bufbuild/protobuf', '@connectrpc/connect', '@connectrpc/connect-web']
     },
     
     // Node.js compatibility for gRPC

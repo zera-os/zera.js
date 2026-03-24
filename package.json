@@ -45,6 +45,8 @@
     "test:grpc": "vitest run src/grpc/**/*.test.ts",
     "test:grpc:watch": "vitest src/grpc/**/*.test.ts",
     "test:grpc:coverage": "vitest run --coverage src/grpc/**/*.test.ts",
+    "test:connectrpc": "vitest run src/grpc/tests/connectrpc-live.test.ts --reporter=verbose",
+    "test:connectrpc:watch": "vitest src/grpc/tests/connectrpc-live.test.ts",
     "test:shared": "vitest run src/shared/**/*.test.ts",
     "test:shared:watch": "vitest src/shared/**/*.test.ts",
     "test:shared:coverage": "vitest run --coverage src/shared/**/*.test.ts",
@@ -113,15 +115,16 @@
       "import": "./dist/index.mjs",
       "require": "./dist/index.cjs",
       "default": "./dist/index.cjs"
-    }
+    },
+    "./dist/*": "./dist/*"
   },
   "overrides": {
     "text-encoding": "npm:fast-text-encoding@1.0.6"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^1.10.1",
-    "@connectrpc/connect": "^1.7.0",
-    "@connectrpc/connect-web": "^1.7.0",
+    "@bufbuild/protobuf": "^2.11.0",
+    "@connectrpc/connect": "^2.1.1",
+    "@connectrpc/connect-web": "^2.1.1",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.0",
     "@solana/spl-token": "^0.4.14",
@@ -137,8 +140,7 @@
     "vitest": "^3.2.4"
   },
   "devDependencies": {
-    "@bufbuild/protoc-gen-es": "^1.10.1",
-    "@connectrpc/protoc-gen-connect-es": "^1.7.0",
+    "@bufbuild/protoc-gen-es": "^2.11.0",
     "@eslint/js": "^9.37.0",
     "@types/node": "^20.19.21",
     "@typescript-eslint/eslint-plugin": "^8.46.0",
@@ -154,7 +156,7 @@
     "minimist": "^1.2.8",
     "mocha": "^11.7.4",
     "tsx": "^4.20.6",
-    "typescript": "^5.9.3",
+    "typescript": "5.9",
     "vite-tsconfig-paths": "^5.1.4"
   }
 }

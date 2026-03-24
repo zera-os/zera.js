@@ -18,10 +18,19 @@
  * ```
  */
 
-import { protoInt64 } from '@bufbuild/protobuf';
+import { protoInt64, create, toBinary } from '@bufbuild/protobuf';
 
-import { Timestamp } from '../../proto/generated/google/protobuf/timestamp_pb.js';
+import { TimestampSchema } from '../../proto/generated/google/protobuf/timestamp_pb.js';
+import type { Timestamp } from '../../proto/generated/google/protobuf/timestamp_pb.js';
 import {
+  CoinTXNSchema,
+  InputTransfersSchema,
+  OutputTransfersSchema,
+  BaseTXNSchema,
+  TransferAuthenticationSchema,
+  PublicKeySchema
+} from '../../proto/generated/txn_pb.js';
+import type {
   CoinTXN,
   InputTransfers,
   OutputTransfers,
@@ -30,7 +39,6 @@ import {
   PublicKey
 } from '../../proto/generated/txn_pb.js';
 import { getNonces } from '../api/handler/nonce/service.js';
-import { createTransactionClient } from '../grpc/transaction/transaction-client.js';
 import { getPublicKeyBytes, generateAddressFromPublicKey, sanitizeAndDecodeAddress } from '../shared/crypto/address-utils.js';
 import { createTransactionHash } from '../shared/crypto/signature-utils.js';
 import { UniversalFeeCalculator, type FeeConfig, type FeeConfigHelper } from '../shared/fee-calculators/universal-fee-calculator.js';
@@ -38,7 +46,7 @@ import { logger } from '../shared/monitoring/index.js';
 import { validateExactAmountBalance, Decimal } from '../shared/utils/amount-utils.js';
 import { sanitizeProtobufObject } from '../shared/utils/protobuf-utils.js';
 import { MAINNET_GRPC_CONFIG } from '../shared/utils/testing-defaults/index.js';
-import { getTokenInfo, type TokenInfo } from '../shared/utils/token-info.js';
+import { getTokenInfo, type TokenInfo, normalizeContractId } from '../shared/utils/token-info.js';
 import { toSmallestUnits } from '../shared/utils/unified-amount-conversion.js';
 import { isValidContractId } from '../shared/utils/validation.js';
 import { signCoinTXNWithKeys } from '../sign/finalize.js';
@@ -185,7 +193,7 @@ async function processUnsignedInputs(
     if (!input) throw new Error(`Input at index ${i} is undefined`);
 
     if (input.publicKey) {
-      const publicKeyObj = new PublicKey({ single: new Uint8Array(getPublicKeyBytes(input.publicKey)) });
+      const publicKeyObj = create(PublicKeySchema, { single: new Uint8Array(getPublicKeyBytes(input.publicKey)) });
       publicKeys.push(publicKeyObj);
     } else if (!input.publicKey && !isAllowance) {
       throw new Error(`Input ${i} is missing publicKey`);
@@ -209,7 +217,7 @@ async function processUnsignedInputs(
     const feePercent = input.feePercent !== undefined ? input.feePercent : '100';
     const scaledFeePercent = new Decimal(feePercent).mul(1000000).toFixed(0);
 
-    inputTransfers.push(new InputTransfers({
+    inputTransfers.push(create(InputTransfersSchema, {
       index: protoInt64.parse(i),
       amount: finalAmount,
       feePercent: parseInt(scaledFeePercent, 10)
@@ -241,8 +249,7 @@ function processOutputs(
       : {}
     );
     const data: { walletAddress: Uint8Array; amount?: string; memo?: string } = {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      walletAddress: new Uint8Array(sanitizeAndDecodeAddress(output.to) as any) as any
+      walletAddress: new Uint8Array(sanitizeAndDecodeAddress(output.to))
     };
     if (finalAmount && finalAmount !== '0') {
       data.amount = finalAmount;
@@ -250,8 +257,7 @@ function processOutputs(
     if (output.memo && output.memo.trim() !== '') {
       data.memo = output.memo;
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return new OutputTransfers(data as any);
+    return create(OutputTransfersSchema, data);
   });
 }
 
@@ -261,7 +267,7 @@ function createBaseTransaction(baseFeeId: string = '$ZRA+0000', baseFee: AmountI
   }
 
   const now = new Date();
-  const timestamp = new Timestamp({
+  const timestamp = create(TimestampSchema, {
     seconds: protoInt64.parse(Math.floor(now.getTime() / 1000)),
     nanos: (now.getTime() % 1000) * 1000000
   });
@@ -274,7 +280,7 @@ function createBaseTransaction(baseFeeId: string = '$ZRA+0000', baseFee: AmountI
   if (baseMemo && baseMemo.trim() !== '') {
     baseData.memo = baseMemo;
   }
-  return new BaseTXN(baseData);
+  return create(BaseTXNSchema, baseData);
 }
 
 function createTransferAuth(
@@ -296,11 +302,7 @@ function createTransferAuth(
   if (signatures && signatures.length > 0) authData.signature = signatures;
   if (allowanceAddresses && allowanceAddresses.length > 0) authData.allowanceAddress = allowanceAddresses;
   if (allowanceNonces && allowanceNonces.length > 0) authData.allowanceNonce = allowanceNonces;
-  return new TransferAuthentication(authData);
-}
-
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+  return create(TransferAuthenticationSchema, authData);
 }
 
 // ============================================================================
@@ -339,19 +341,27 @@ export async function buildCoinTXN(
   baseMemo: string = '',
   grpcConfig: GRPCConfig = MAINNET_GRPC_CONFIG
 ): Promise<CoinTXN> {
-  // Validate
-  validateTransactionRequirements(inputs, outputs, contractId);
+  // Normalize all contract IDs to canonical casing for consistent lookups
+  const normalizedContractId = normalizeContractId(contractId);
+  const normalizedFeeConfig: FeeConfig = {
+    ...feeConfig,
+    ...(feeConfig.baseFeeId && { baseFeeId: normalizeContractId(feeConfig.baseFeeId) }),
+    ...(feeConfig.contractFeeId && { contractFeeId: normalizeContractId(feeConfig.contractFeeId) }),
+    ...(feeConfig.interfaceFeeId && { interfaceFeeId: normalizeContractId(feeConfig.interfaceFeeId) })
+  };
+
+  validateTransactionRequirements(inputs, outputs, normalizedContractId);
 
   const tokenInfoMap = await getTokenInfo(
-    contractId,
-    [feeConfig.contractFeeId, feeConfig.interfaceFeeId, feeConfig.baseFeeId].filter((id): id is string => Boolean(id)),
+    normalizedContractId,
+    [normalizedFeeConfig.contractFeeId, normalizedFeeConfig.interfaceFeeId, normalizedFeeConfig.baseFeeId].filter((id): id is string => Boolean(id)),
     grpcConfig
   );
 
   // Process inputs (without private keys)
   const inputsCopy = inputs.map(i => ({ ...i }));
   const { publicKeys, inputTransfers, nonces, allowanceAddresses, allowanceNonces } = await processUnsignedInputs(
-    inputsCopy, contractId, tokenInfoMap, grpcConfig
+    inputsCopy, normalizedContractId, tokenInfoMap, grpcConfig
   );
 
   // Filter inputs for validation (remove allowance authorizers)
@@ -359,27 +369,27 @@ export async function buildCoinTXN(
     ? inputsCopy.slice(1)
     : inputsCopy;
 
-  const outputTransfers = processOutputs(outputs, tokenInfoMap, contractId);
+  const outputTransfers = processOutputs(outputs, tokenInfoMap, normalizedContractId);
 
-  validateTransactionBalance(validationInputs, outputs, contractId, tokenInfoMap);
+  validateTransactionBalance(validationInputs, outputs, normalizedContractId, tokenInfoMap);
   validateFeePercentages(inputTransfers);
 
   // Build unsigned transaction
-  const initialTxnBase = createBaseTransaction(feeConfig.baseFeeId, '1', baseMemo);
-  const initialCoinTxnData: Partial<CoinTXN> = {
+  const initialTxnBase = createBaseTransaction(normalizedFeeConfig.baseFeeId, '1', baseMemo);
+  const initialCoinTxnData: Record<string, unknown> = {
     base: initialTxnBase,
-    contractId,
+    contractId: normalizedContractId,
     auth: createTransferAuth(publicKeys, [], nonces, allowanceAddresses, allowanceNonces),
     inputTransfers,
     outputTransfers
   };
 
-  let coinTxn = new CoinTXN(initialCoinTxnData);
+  let coinTxn = create(CoinTXNSchema, initialCoinTxnData);
 
   // Calculate fees
   const feeConfigHelper: FeeConfigHelper<CoinTXN> = {
-    ...feeConfig,
-    ...(grpcConfig && !feeConfig.grpcConfig ? { grpcConfig } : {}),
+    ...normalizedFeeConfig,
+    ...(grpcConfig && !normalizedFeeConfig.grpcConfig ? { grpcConfig } : {}),
     contractId: coinTxn.contractId,
     protoObject: coinTxn,
     tokenInfoMap
@@ -389,8 +399,8 @@ export async function buildCoinTXN(
   // Sanitize
   const sanitizedData = sanitizeProtobufObject(coinTxn, { removeEmptyFields: true });
   if (!sanitizedData) throw new Error('Failed to sanitize transaction object');
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  coinTxn = new CoinTXN(sanitizedData as any);
+   
+  coinTxn = create(CoinTXNSchema, sanitizedData);
 
   // Return unsigned — no signatures, no hash
   return coinTxn;
@@ -444,7 +454,7 @@ export async function createCoinTXN(
     coinTxn = signCoinTXNWithKeys(coinTxn, signerKeys);
   } else {
     // Allowance-only transactions: just add hash (no signatures)
-    const bytes = coinTxn.toBinary();
+    const bytes = toBinary(CoinTXNSchema, coinTxn);
     const baseData = coinTxn.base;
     if (baseData) {
       baseData.hash = createTransactionHash(bytes);
@@ -462,17 +472,6 @@ export async function createCoinTXN(
  * Sends a CoinTXN transaction to the ZERA Network via gRPC.
  */
 export async function sendCoinTXN(coinTxn: CoinTXN, grpcConfig: GRPCConfig = {}): Promise<string> {
-  try {
-    const client = createTransactionClient(grpcConfig);
-    const _response = await client.submitCoinTransaction(coinTxn);
-
-    return coinTxn.base?.hash ?
-      toHex(coinTxn.base.hash) :
-      'Transaction sent successfully (no hash available)';
-  } catch (error) {
-    if (error instanceof Error) {
-      throw error;
-    }
-    throw new Error(`Failed to submit coin transaction: ${(error as Error).message}`);
-  }
+  const { submitTransaction } = await import('../grpc/transaction/transaction-client.js');
+  return submitTransaction(coinTxn, grpcConfig);
 }

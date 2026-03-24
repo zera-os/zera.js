@@ -14,10 +14,37 @@
  * @module sign/finalize
  */
 
+import { toBinary } from '@bufbuild/protobuf';
+
 import type { BaseTXN, CoinTXN, TransferAuthentication } from '../../proto/generated/txn_pb.js';
+import { getSchemaForTypeName } from '../adapter/serialization.js';
 import { signTransactionData, createTransactionHash } from '../shared/crypto/signature-utils.js';
 
 import type { ZeraSigner } from './signer.js';
+
+// ============================================================================
+// INTERNAL HELPER — Generic toBinary using schema registry
+// ============================================================================
+
+/**
+ * Serialize any protobuf message to binary using its $typeName to look up the schema.
+ * Falls back to the v1 .toBinary() instance method if the schema is not found.
+ */
+function messageToBytes(msg: unknown): Uint8Array {
+  const typedMsg = msg as { $typeName?: string; toBinary?: () => Uint8Array };
+  if (typedMsg.$typeName) {
+    const schema = getSchemaForTypeName(typedMsg.$typeName);
+    if (schema) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return toBinary(schema as any, msg as any);
+    }
+  }
+  // Fallback: try v1 instance method
+  if (typeof typedMsg.toBinary === 'function') {
+    return typedMsg.toBinary();
+  }
+  throw new Error('Cannot serialize message: no $typeName found and no toBinary method');
+}
 
 // ============================================================================
 // STANDARD TRANSACTIONS — External Signer
@@ -39,15 +66,13 @@ export async function signAndFinalize<T extends { base?: BaseTXN }>(
   txn: T,
   signer: ZeraSigner
 ): Promise<T> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bytes = (txn as any).toBinary();
+  const bytes = messageToBytes(txn);
   const signature = await signer.sign(bytes);
 
   const baseData = (txn.base || {} as Partial<BaseTXN>) as BaseTXN;
   baseData.signature = signature;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const signedBytes = (txn as any).toBinary();
+  const signedBytes = messageToBytes(txn);
   baseData.hash = createTransactionHash(signedBytes);
 
   return txn;
@@ -75,15 +100,13 @@ export function signWithKey<T extends { base?: BaseTXN }>(
   publicKeyId: string
 ): T {
   // Sign
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const bytes = (txn as any).toBinary();
+  const bytes = messageToBytes(txn);
   const signature = signTransactionData(bytes, privateKey, publicKeyId);
   const baseData = (txn.base || ({} as Partial<BaseTXN>)) as BaseTXN;
   baseData.signature = signature;
 
   // Hash
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const signedBytes = (txn as any).toBinary();
+  const signedBytes = messageToBytes(txn);
   baseData.hash = createTransactionHash(signedBytes);
 
   return txn;
@@ -113,8 +136,7 @@ export async function signCoinTXN(
     throw new Error('At least one signer is required');
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const txnBytes = (txn as any).toBinary();
+  const txnBytes = messageToBytes(txn);
 
   const authData = txn.auth || {} as Partial<TransferAuthentication>;
   if (!authData.signature) {
@@ -134,8 +156,7 @@ export async function signCoinTXN(
   }
 
   // Hash after all signatures
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const signedBytes = (txn as any).toBinary();
+  const signedBytes = messageToBytes(txn);
   const baseData = (txn.base || {} as Partial<BaseTXN>) as BaseTXN;
   baseData.hash = createTransactionHash(signedBytes);
 
@@ -175,8 +196,7 @@ export function signCoinTXNWithKeys(
     throw new Error('At least one key pair is required');
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const txnBytes = (txn as any).toBinary();
+  const txnBytes = messageToBytes(txn);
 
   const authData = txn.auth || {} as Partial<TransferAuthentication>;
   if (!authData.signature) {
@@ -199,11 +219,9 @@ export function signCoinTXNWithKeys(
   }
 
   // Hash after all signatures
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const signedBytes = (txn as any).toBinary();
+  const signedBytes = messageToBytes(txn);
   const baseData = (txn.base || {} as Partial<BaseTXN>) as BaseTXN;
   baseData.hash = createTransactionHash(signedBytes);
 
   return txn;
 }
-

@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { 
   ED25519_TEST_KEYS,
   TEST_WALLET_ADDRESSES
@@ -37,6 +37,7 @@ vi.mock('../../shared/fee-calculators/universal-fee-calculator.js', () => ({
 
 // Mock the token info service
 vi.mock('../../shared/utils/token-info.js', () => ({
+  normalizeContractId: vi.fn((id: string) => id),
   getTokenInfo: vi.fn().mockResolvedValue(new Map([
     ['$ZRA+0000', {
       contractId: '$ZRA+0000',
@@ -78,7 +79,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
 
@@ -122,7 +123,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
 
@@ -151,7 +152,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
   });
@@ -182,7 +183,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).rejects.toThrow('Amount mismatch in coin transaction');
     });
 
@@ -211,7 +212,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).rejects.toThrow('Amount mismatch in coin transaction');
     });
 
@@ -248,7 +249,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).rejects.toThrow('Amount mismatch in coin transaction');
     });
 
@@ -277,7 +278,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).rejects.toThrow('Amount mismatch in coin transaction');
     });
   });
@@ -311,7 +312,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
 
@@ -347,7 +348,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).rejects.toThrow('Amount mismatch in coin transaction');
     });
 
@@ -382,7 +383,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
   });
@@ -413,7 +414,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
 
@@ -442,7 +443,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
   });
@@ -475,7 +476,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
 
@@ -515,7 +516,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
 
@@ -546,7 +547,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
 
@@ -577,7 +578,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
   });
@@ -611,7 +612,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
 
@@ -643,7 +644,7 @@ describe('Coin Transaction Balance Validation', () => {
         '$ZRA+0000',
         feeConfig,
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       )).resolves.toBeDefined();
     });
   });

@@ -4,7 +4,7 @@
  * Demonstrates how to use the fee info service to get comprehensive token fee information.
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
 import { getTokenFeeInfo } from '../request.js';
 
 /**
@@ -18,7 +18,7 @@ async function getAllTokenFeeInfoExample() {
       contractIds: ['$ZRA+0000', '$IIT+0000'],
       includeRates: true,
       includeContractFees: true
-    }, PROTONET_GRPC_CONFIG); // Use PROTONET_GRPC_CONFIG here
+    }, MAINNET_GRPC_CONFIG); // Use MAINNET_GRPC_CONFIG here
     
     console.log(`Found ${response.tokens.length} tokens with fee information:`);
     response.tokens.forEach((info) => {
@@ -48,18 +48,18 @@ async function getAllTokenFeeInfoExample() {
 }
 
 /**
- * Example: Get fee information for a single token using PROTONET_GRPC_CONFIG
+ * Example: Get fee information for a single token using MAINNET_GRPC_CONFIG
  */
 getSingleTokenFeeInfoExample();
 async function getSingleTokenFeeInfoExample() {
   try {
-    console.log('Fetching fee information for a single token ($ZRA+0000) using PROTONET_GRPC_CONFIG...');
+    console.log('Fetching fee information for a single token ($ZRA+0000) using MAINNET_GRPC_CONFIG...');
     
     const response = await getTokenFeeInfo({
       contractIds: ['$ZRA+0000'],
       includeRates: true,
       includeContractFees: true
-    }, PROTONET_GRPC_CONFIG);
+    }, MAINNET_GRPC_CONFIG);
     
     if (response.tokens.length > 0) {
       const info = response.tokens[0];

@@ -49,7 +49,9 @@ const GUARDIAN_CONFIG = {
 };
 
 /** Solana RPC connection */
-const connection = new Connection(SOLANA_TEST_RPC.devnet);
+/** Solana RPC endpoint — override for mainnet or custom RPC */
+const SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+const connection = new Connection(SOLANA_RPC_URL);
 
 /** Solana wallet */
 const solanaWallet = Keypair.fromSecretKey(bs58.decode(SOLANA_TEST_KEYS.primary.privateKey));

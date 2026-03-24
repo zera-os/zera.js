@@ -22,7 +22,7 @@ import { Connection, Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 // --- Solana bridge builders ---
-import { PROTONET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
 import { SOLANA_TEST_KEYS, SOLANA_TEST_RPC, ED25519_TEST_KEYS, TEST_WALLET_ADDRESSES } from '../../../../test-utils/index.js';
 import { sendSmartContractExecuteTXN } from '../../../execute/index.js';
 import {
@@ -46,7 +46,9 @@ const GUARDIAN_CONFIG = {
 };
 
 /** Solana RPC connection */
-const connection = new Connection(SOLANA_TEST_RPC.devnet);
+/** Solana RPC endpoint — override for mainnet or custom RPC */
+const SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+const connection = new Connection(SOLANA_RPC_URL);
 
 /** Solana wallet (signs lock + release transactions) */
 const solanaWallet = Keypair.fromSecretKey(bs58.decode(SOLANA_TEST_KEYS.primary.privateKey));
@@ -57,7 +59,7 @@ const ZERA_PUBLIC_KEY = ED25519_TEST_KEYS.alice.publicKey;
 const ZERA_PRIVATE_KEY = ED25519_TEST_KEYS.alice.privateKey;
 
 /** ZERA network config */
-const ZERA_CONFIG = PROTONET_GRPC_CONFIG;
+const ZERA_CONFIG = MAINNET_GRPC_CONFIG;
 
 /** Fee config for ZERA transactions */
 const FEE_AMOUNT_USD = '5.00';

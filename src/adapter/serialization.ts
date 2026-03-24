@@ -3,7 +3,7 @@
  *
  * Universal, protobuf-driven encoding/decoding for ZERA transactions.
  * Instead of hardcoding supported types, this module auto-discovers all
- * protobuf message classes from the generated `txn_pb` module at runtime.
+ * protobuf message schemas from the generated `txn_pb` module at runtime.
  *
  * Any new protobuf message type added to `txn_pb.ts` is automatically
  * supported — no code changes needed here.
@@ -11,7 +11,7 @@
  * @module adapter/serialization
  */
 
-import { Message } from '@bufbuild/protobuf';
+import { type Message, type DescMessage, toBinary, fromBinary } from '@bufbuild/protobuf';
 
 import * as txn_pb from '../../proto/generated/txn_pb.js';
 
@@ -37,34 +37,27 @@ export interface SerializedTransaction {
 // ============================================================================
 
 /**
- * Interface for a protobuf message constructor (class) that we can call
- * `fromBinary` on to reconstruct the message.
- */
-interface MessageConstructor {
-  readonly typeName: string;
-  fromBinary(bytes: Uint8Array): Message;
-}
-
-/**
- * Auto-discovered registry: maps protobuf type names to their constructors.
+ * Auto-discovered registry: maps protobuf type names to their schema descriptors.
  *
  * At module load time, we iterate over all exports from `txn_pb` and register
- * any class that has `typeName` and `fromBinary` — i.e., any generated
- * protobuf message class.
+ * any export ending in "Schema" that has a `typeName` property — i.e., any
+ * generated protobuf message schema (v2 API).
  */
-const typeRegistry = new Map<string, MessageConstructor>();
+const schemaRegistry = new Map<string, DescMessage>();
 
 // Populate the registry from all txn_pb exports
-for (const [, exported] of Object.entries(txn_pb)) {
+for (const [key, exported] of Object.entries(txn_pb)) {
+  // In protobuf-es v2, schemas are named like "CoinTXNSchema" and are plain objects
+  // with a `typeName` property (from DescMessage)
   if (
-    typeof exported === 'function' &&
+    key.endsWith('Schema') &&
+    exported !== null &&
+    typeof exported === 'object' &&
     'typeName' in exported &&
-    typeof (exported as MessageConstructor).typeName === 'string' &&
-    'fromBinary' in exported &&
-    typeof (exported as MessageConstructor).fromBinary === 'function'
+    typeof (exported as DescMessage).typeName === 'string'
   ) {
-    const constructor = exported as MessageConstructor;
-    typeRegistry.set(constructor.typeName, constructor);
+    const schema = exported as DescMessage;
+    schemaRegistry.set(schema.typeName, schema);
   }
 }
 
@@ -96,36 +89,52 @@ function fromBase64(base64: string): Uint8Array {
 }
 
 // ============================================================================
+// PUBLIC UTILITY — Schema Lookup
+// ============================================================================
+
+/**
+ * Look up the schema descriptor for a protobuf message by its `$typeName`.
+ * Used by `finalize.ts` for generic `toBinary(schema, message)` calls.
+ */
+export function getSchemaForTypeName(typeName: string): DescMessage | undefined {
+  return schemaRegistry.get(typeName);
+}
+
+// ============================================================================
 // PUBLIC API
 // ============================================================================
 
 /**
  * Serialize any protobuf transaction into a portable string envelope.
  *
- * Uses the protobuf's built-in `typeName` (e.g., `"zera_txn.CoinTXN"`)
+ * Uses the protobuf's `$typeName` property (e.g., `"zera_txn.CoinTXN"`)
  * as the type discriminator, so **every** generated protobuf message type
  * is supported automatically — no manual mapping needed.
  *
- * @param txn - Any protobuf `Message` instance (CoinTXN, GovernanceVote, etc.)
+ * @param txn - Any protobuf message (CoinTXN, GovernanceVote, etc.)
+ * @param schema - The schema descriptor for the message type
  * @returns A `SerializedTransaction` envelope
  *
  * @example
  * ```typescript
- * const envelope = serializeTransaction(coinTxn);
+ * import { CoinTXNSchema } from '../../proto/generated/txn_pb.js';
+ * const envelope = serializeTransaction(coinTxn, CoinTXNSchema);
  * // envelope.type === "zera_txn.CoinTXN"
  * const json = JSON.stringify(envelope); // send over the wire
  * ```
  */
-export function serializeTransaction(txn: Message): SerializedTransaction {
-  const typeName = txn.getType().typeName;
+export function serializeTransaction(txn: Message, schema?: DescMessage): SerializedTransaction {
+  const typeName = txn.$typeName;
 
-  if (!typeRegistry.has(typeName)) {
+  // If schema is provided, use it directly; otherwise look it up
+  const resolvedSchema = schema || schemaRegistry.get(typeName);
+  if (!resolvedSchema) {
     throw new Error(`Unknown protobuf type "${typeName}" — not found in txn_pb registry`);
   }
 
   return {
     type: typeName,
-    data: toBase64(txn.toBinary()),
+    data: toBase64(toBinary(resolvedSchema, txn)),
     version: 1
   };
 }
@@ -134,15 +143,15 @@ export function serializeTransaction(txn: Message): SerializedTransaction {
  * Deserialize a `SerializedTransaction` envelope back into a protobuf object.
  *
  * Looks up the type name in the auto-populated registry and calls `fromBinary`
- * on the corresponding class.
+ * on the corresponding schema.
  *
  * @param envelope - The serialized envelope (or its JSON string representation)
- * @returns The reconstructed protobuf `Message` instance
+ * @returns The reconstructed protobuf message
  *
  * @example
  * ```typescript
  * const txn = deserializeTransaction(envelope);
- * if (txn instanceof CoinTXN) { ... }
+ * if (txn.$typeName === 'zera_txn.CoinTXN') { ... }
  * ```
  */
 export function deserializeTransaction(envelope: SerializedTransaction | string): Message {
@@ -157,16 +166,16 @@ export function deserializeTransaction(envelope: SerializedTransaction | string)
     throw new Error(`Unsupported serialization version: ${parsed.version}`);
   }
 
-  const constructor = typeRegistry.get(parsed.type);
-  if (!constructor) {
+  const schema = schemaRegistry.get(parsed.type);
+  if (!schema) {
     throw new Error(
       `Unknown protobuf type "${parsed.type}" — not found in registry. ` +
-      `Available types: ${[...typeRegistry.keys()].join(', ')}`
+      `Available types: ${[...schemaRegistry.keys()].join(', ')}`
     );
   }
 
   const bytes = fromBase64(parsed.data);
-  return constructor.fromBinary(bytes);
+  return fromBinary(schema, bytes);
 }
 
 /**
@@ -176,5 +185,5 @@ export function deserializeTransaction(envelope: SerializedTransaction | string)
  * @returns Array of fully-qualified protobuf type names
  */
 export function getRegisteredTypes(): string[] {
-  return [...typeRegistry.keys()];
+  return [...schemaRegistry.keys()];
 }

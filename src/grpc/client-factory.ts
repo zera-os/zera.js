@@ -1,12 +1,59 @@
 /* eslint-disable no-undef */
-import type { ServiceType } from '@bufbuild/protobuf';
-import { createPromiseClient, type PromiseClient } from '@connectrpc/connect';
+import type { GenService } from '@bufbuild/protobuf/codegenv2';
+import { ConnectError, createClient as createConnectClient, type Client, type Interceptor } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
 
 import { logger } from '../shared/monitoring/index.js';
 import type { GRPCConfig } from '../types/index.js';
 
 import { createGrpcWebFetch } from './utils/grpc-web-fetch-wrapper.js';
+
+/**
+ * Universal gRPC error normalizer.
+ *
+ * ConnectRPC throws `ConnectError` objects whose properties are non-enumerable,
+ * causing `console.error(err)` to print `{}`.  This interceptor converts every
+ * ConnectError into a standard `Error` with a human-readable message so that
+ * callers (bridge, swap, send, governance, etc.) always get useful diagnostics.
+ */
+const errorNormalizer: Interceptor = (next) => async (req) => {
+  try {
+    return await next(req);
+  } catch (err) {
+    if (err instanceof ConnectError) {
+      const readable = new Error(
+        `gRPC ${req.method.name} failed: [${err.code}] ${err.rawMessage || err.message}`
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (readable as any).cause = err;  // preserve original for deep inspection
+      throw readable;
+    }
+    throw err;
+  }
+};
+
+/**
+ * URL Rewriter Interceptor.
+ *
+ * In @connectrpc/connect v2, the request URL is built using `method.parent.typeName`.
+ * Shallow cloning `service.typeName` no longer works. This interceptor explicitly
+ * rewrites the outgoing request URL to match the Envoy paths expected by the ZERA backend.
+ */
+const urlRewriter: Interceptor = (next) => async (req) => {
+  let rewrittenUrl = req.url;
+  for (const [originalPath, newPath] of Object.entries(SERVICE_TYPE_NAME_MAPPING)) {
+    const searchString = `/${originalPath}/`;
+    if (rewrittenUrl.includes(searchString)) {
+      rewrittenUrl = rewrittenUrl.replace(searchString, `/${newPath}/`);
+      break;
+    }
+  }
+  
+  if (rewrittenUrl !== req.url) {
+    return next({ ...req, url: rewrittenUrl });
+  }
+  return next(req);
+};
 
 /**
  * Mapping of protobuf service names to desired URL prefixes/service names.
@@ -27,14 +74,15 @@ const SERVICE_TYPE_NAME_MAPPING: Record<string, string> = {
  * 
  * @param service - The service definition (from generated proto)
  * @param config - Configuration options
- * @returns A PromiseClient for the service
+ * @returns A Client for the service
  */
-export function createClient<T extends ServiceType>(
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createClient<T extends GenService<any>>(
   service: T,
   config: GRPCConfig = {}
-): PromiseClient<T> {
+): Client<T> {
   if (config.transport) {
-    return createPromiseClient(service, config.transport);
+    return createConnectClient(service, config.transport);
   }
 
   // Default configuration: mainnet.zerascan.io over HTTPS (443)
@@ -70,7 +118,7 @@ export function createClient<T extends ServiceType>(
   
   // If the endpoint already includes a service path (e.g., /api, /txn, /validator),
   // remove it since the service mapping will add it back
-  // This prevents URLs like: protonet.zerascan.io/api//GetTokenFeeInfo
+  // This prevents URLs like: mainnet.zerascan.io/api//GetTokenFeeInfo
   if (servicePath) {
     const pathToRemove = `/${servicePath.replace(/\/$/, '')}`;
     if (baseUrl.endsWith(pathToRemove)) {
@@ -212,19 +260,10 @@ export function createClient<T extends ServiceType>(
   const transport = createGrpcWebTransport({
     baseUrl,
     useBinaryFormat: true,
+    interceptors: [errorNormalizer, urlRewriter],
     // Use custom fetch wrapper for all client-side environments (RN + Web)
     fetch: !isNodeJs ? createGrpcWebFetch() : retryingFetch
   });
 
-  // Apply service name mapping if applicable
-  let finalService = service;
-  if (service.typeName in SERVICE_TYPE_NAME_MAPPING) {
-    // Create a shallow copy with the modified typeName to match Envoy rewriting rules
-    finalService = { 
-      ...service, 
-      typeName: SERVICE_TYPE_NAME_MAPPING[service.typeName] 
-    } as T;
-  }
-
-  return createPromiseClient(finalService, transport);
+  return createConnectClient(service, transport);
 }

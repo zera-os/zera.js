@@ -20,7 +20,7 @@
 import { Connection, Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 
-import { PROTONET_GRPC_CONFIG } from '../../../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../../../shared/utils/testing-defaults/index.js';
 import { SOLANA_TEST_KEYS, SOLANA_TEST_RPC, ED25519_TEST_KEYS } from '../../../../../test-utils/index.js';
 import {
   fetchSolanaVAA,
@@ -41,14 +41,15 @@ const GUARDIAN_CONFIG = {
   port: 443
 };
 
-/** Solana connection using test RPC */
-const connection = new Connection(SOLANA_TEST_RPC.devnet);
-
 /** Solana test wallet */
 const solanaWallet = Keypair.fromSecretKey(bs58.decode(SOLANA_TEST_KEYS.primary.privateKey));
 
-/** ZERA network configuration (protonet) */
-const ZERA_CONFIG = PROTONET_GRPC_CONFIG;
+/** Solana RPC endpoint — override for mainnet or custom RPC */
+const SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+const connection = new Connection(SOLANA_RPC_URL);
+
+/** ZERA network configuration (mainnet) */
+const ZERA_CONFIG = MAINNET_GRPC_CONFIG;
 
 /** Fee amount in USD for bridge transactions */
 const FEE_AMOUNT_USD = '5.00'; // $5.00 USD
@@ -150,7 +151,7 @@ async function submitToSolanaExample(zeraTxnHash?: string) {
   
   console.log(`Processing ZERA transaction: ${txnHash.slice(0, 20)}...`);
   console.log(`Solana payer: ${solanaWallet.publicKey.toBase58()}`);
-  console.log(`RPC endpoint: ${SOLANA_TEST_RPC.devnet}`);
+  console.log(`RPC endpoint: ${SOLANA_RPC_URL}`);
   console.log('');
 
   try {

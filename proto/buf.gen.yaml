@@ -8,29 +8,12 @@ managed:
       value: google.golang.org/genproto/googleapis
       module: buf.build/googleapis/googleapis
 plugins:
-  # Generate JavaScript files for runtime with proper import paths
+  # Generate JavaScript runtime files with TypeScript declarations
+  # v2 protoc-gen-es generates messages, enums, services, and schemas natively
   - local: protoc-gen-es
     out: generated
     opt: 
-      - target=js
-      - import_extension=.js
-      - keep_empty_files=true
-    include_imports: true
-    include_wkt: true
-  # Generate TypeScript files for type definitions
-  - local: protoc-gen-es
-    out: generated
-    opt: 
-      - target=ts
-      - import_extension=.js
-      - keep_empty_files=true
-    include_imports: true
-    include_wkt: true
-  # Generate Connect client for gRPC
-  - local: protoc-gen-connect-es
-    out: generated
-    opt: 
-      - target=ts
+      - target=js+dts
       - import_extension=.js
       - keep_empty_files=true
     include_imports: true

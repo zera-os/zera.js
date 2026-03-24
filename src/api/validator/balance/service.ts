@@ -5,9 +5,12 @@
  * Contains all business logic for balance operations.
  */
 
+import { create } from '@bufbuild/protobuf';
 import Decimal from 'decimal.js';
 
-import { BalanceResponse } from '../../../../proto/generated/api_pb.js';
+
+import { BalanceResponseSchema } from '../../../../proto/generated/api_pb.js';
+import type { BalanceResponse } from '../../../../proto/generated/api_pb.js';
 import { createValidatorAPIClient } from '../../../grpc/api/validator-api-client.js';
 import type { GRPCConfig } from '../../../types/index.js';
 
@@ -62,11 +65,11 @@ export async function getBalance(
     // Handle invalid wallet error - return empty balance response
     const err = error as { details?: string; code?: string; message?: string };
     if ((err.details && err.details.includes('Invalid Wallet')) || (err.message && err.message.includes('Invalid Wallet')) || err.code === 'INVALID_ARGUMENT') {
-      const emptyResponse = new BalanceResponse({
+      const emptyResponse = create(BalanceResponseSchema, {
         balance: '0',
         denomination: '1',
         rate: '0'
-      });
+      }) as BalanceResponse;
       return enhanceBalanceResponse(emptyResponse);
     }
     throw new Error(`Failed to get balance from validator: ${(error as Error).message}`);

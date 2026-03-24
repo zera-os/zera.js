@@ -1,8 +1,9 @@
-import type { PromiseClient } from '@connectrpc/connect';
+import { create } from '@bufbuild/protobuf';
+import type { Client } from '@connectrpc/connect';
 
-import { APIService } from '../../../proto/generated/api_connect.js';
 import type { TokenFeeInfoResponse, NonceResponse, BalanceResponse, BaseFeeResponse } from '../../../proto/generated/api_pb.js';
-import { NonceRequest, TokenFeeInfoRequest, BalanceRequest, BaseFeeRequest } from '../../../proto/generated/api_pb.js';
+import { APIService } from '../../../proto/generated/api_pb.js';
+import { NonceRequestSchema, TokenFeeInfoRequestSchema, BalanceRequestSchema, BaseFeeRequestSchema } from '../../../proto/generated/api_pb.js';
 import type { PublicKey } from '../../../proto/generated/txn_pb.js';
 import { TRANSACTION_TYPE } from '../../../proto/generated/txn_pb.js';
 import { sanitizeAndDecodeAddress } from '../../shared/crypto/address-utils.js';
@@ -38,7 +39,7 @@ export interface ValidatorAPIClient {
  * Validator API Client Class
  */
 class ValidatorAPIClientImpl implements ValidatorAPIClient {
-  private client: PromiseClient<typeof APIService>;
+  private client: Client<typeof APIService>;
 
   constructor(options: GRPCConfig = {}) {
     const config = { ...options };
@@ -49,9 +50,9 @@ class ValidatorAPIClientImpl implements ValidatorAPIClient {
    * Get nonce for an address
    */
   async getNonce(address: string): Promise<NonceResponse> {
-    const request = new NonceRequest({
-      walletAddress: new Uint8Array(sanitizeAndDecodeAddress(address)), // Convert base58 to bytes
-      encoded: false // Decode on local side for marginally faster processing
+    const request = create(NonceRequestSchema, {
+      walletAddress: new Uint8Array(sanitizeAndDecodeAddress(address)),
+      encoded: false
     });
     return this.client.nonce(request);
   }
@@ -60,7 +61,7 @@ class ValidatorAPIClientImpl implements ValidatorAPIClient {
    * Get comprehensive token fee information
    */
   async getTokenFeeInfo(request: { contractIds: string[] }): Promise<TokenFeeInfoResponse> {
-    const protoRequest = new TokenFeeInfoRequest({
+    const protoRequest = create(TokenFeeInfoRequestSchema, {
       contractIds: request.contractIds
     });
     return this.client.getTokenFeeInfo(protoRequest);
@@ -70,10 +71,10 @@ class ValidatorAPIClientImpl implements ValidatorAPIClient {
    * Get balance for an address and contract ID
    */
   async getBalance(address: string, contractId: string): Promise<BalanceResponse> {
-    const request = new BalanceRequest({
-      walletAddress: new Uint8Array(sanitizeAndDecodeAddress(address)), // Convert base58 to bytes
+    const request = create(BalanceRequestSchema, {
+      walletAddress: new Uint8Array(sanitizeAndDecodeAddress(address)),
       contractId: contractId,
-      encoded: false // Decode on local side for marginally faster processing
+      encoded: false
     });
     return this.client.balance(request);
   }
@@ -82,7 +83,7 @@ class ValidatorAPIClientImpl implements ValidatorAPIClient {
    * Get base fee info for a transaction type and public key
    */
   async getBaseFee(publicKey: PublicKey | undefined, txnType: TRANSACTION_TYPE): Promise<BaseFeeResponse> {
-    const request = new BaseFeeRequest({
+    const request = create(BaseFeeRequestSchema, {
       ...(publicKey ? { publicKey } : {}),
       txnType: txnType
     });

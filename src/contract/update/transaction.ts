@@ -7,10 +7,11 @@
  * `updateContract()` is a convenience wrapper: build + sign with private key.
  */
 
-import { protoInt64 } from '@bufbuild/protobuf';
+import { protoInt64, create } from '@bufbuild/protobuf';
 
-import { ContractUpdateTXN } from '../../../proto/generated/txn_pb.js';
-import { createTransactionClient } from '../../grpc/transaction/transaction-client.js';
+import { ContractUpdateTXNSchema } from '../../../proto/generated/txn_pb.js';
+import type { ContractUpdateTXN } from '../../../proto/generated/txn_pb.js';
+import { submitTransaction } from '../../grpc/transaction/transaction-client.js';
 import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
 import { UniversalFeeCalculator, type FeeConfigHelper } from '../../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../../shared/monitoring/index.js';
@@ -76,7 +77,7 @@ export async function buildContractUpdateTXN(
   if (options.feeAmountParts !== undefined) baseParams.feeAmountParts = options.feeAmountParts;
   const base = buildStandardBaseTXN(baseParams);
 
-  const updateData: Partial<ContractUpdateTXN> = { base, contractId: options.contractId, contractVersion: options.contractVersion };
+  const updateData: Record<string, unknown> = { base, contractId: options.contractId, contractVersion: options.contractVersion };
   if (options.name) updateData.name = options.name;
   if (options.governance) updateData.governance = options.governance;
   if (options.restrictedKeys?.length) updateData.restrictedKeys = options.restrictedKeys;
@@ -88,7 +89,7 @@ export async function buildContractUpdateTXN(
   if (options.immutableKycStatus !== undefined) updateData.immutableKycStatus = options.immutableKycStatus;
   if (options.quashThreshold !== undefined) updateData.quashThreshold = options.quashThreshold;
 
-  const updateTxn = new ContractUpdateTXN(updateData);
+  const updateTxn = create(ContractUpdateTXNSchema, updateData);
   const effectiveFeeId = options.feeId || '$ZRA+0000';
 
   const feeOptions: FeeConfigHelper<ContractUpdateTXN> = {
@@ -136,8 +137,7 @@ export async function sendUpdateContract(
   update: ContractUpdateTXN,
   grpcConfig: GRPCConfig = {}
 ): Promise<string> {
-  const client = createTransactionClient(grpcConfig);
-  await client.submitContractUpdate(update);
+  await submitTransaction(update, grpcConfig);
   return update.base?.hash
     ? Array.from(update.base.hash).map(b => b.toString(16).padStart(2, '0')).join('')
     : 'Contract update submitted (no hash available)';

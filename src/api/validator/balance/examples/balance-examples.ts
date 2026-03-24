@@ -4,7 +4,7 @@
  * This provides examples for the validator balance service.
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
 import { TEST_WALLET_ADDRESSES } from '../../../../test-utils/index.js';
 import { getBalance, getBalances } from '../service.js';
 
@@ -17,7 +17,7 @@ async function basicUsageExample(): Promise<void> {
   const address = TEST_WALLET_ADDRESSES.alice;
   const contractId = '$ZRA+0000'; // ZERA native token
   
-  const balance = await getBalance(address, contractId, PROTONET_GRPC_CONFIG);
+  const balance = await getBalance(address, contractId, MAINNET_GRPC_CONFIG);
   
   console.log(`Address: ${address}`);
   console.log(`Contract ID: ${contractId}`);

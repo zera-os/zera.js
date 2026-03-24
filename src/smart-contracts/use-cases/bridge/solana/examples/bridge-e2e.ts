@@ -21,7 +21,9 @@ import { SOLANA_TEST_KEYS, SOLANA_TEST_RPC, TEST_WALLET_ADDRESSES } from '../../
 // ============================================================================
 
 // Solana RPC endpoint (use custom test RPC)
-const SOLANA_RPC = SOLANA_TEST_RPC.devnet;
+/** Solana RPC endpoint — override for mainnet or custom RPC */
+const SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+const SOLANA_RPC = SOLANA_RPC_URL;
 
 // Test wallet from centralized test keys
 const testWallet = Keypair.fromSecretKey(bs58.decode(SOLANA_TEST_KEYS.primary.privateKey));

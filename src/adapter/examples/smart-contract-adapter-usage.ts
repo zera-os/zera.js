@@ -5,7 +5,7 @@
  * via the adapter module.
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { sendSmartContractExecuteTXN } from '../../smart-contracts/execute/index.js';
 import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
 import {
@@ -37,7 +37,7 @@ export async function exampleExecuteSmartContract(): Promise<void> {
     parameters,
     alice.publicKey,
     {
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       feeAmountParts: '1',
       nonce: '0',
       memo: 'Hello from adapter!'
@@ -53,7 +53,7 @@ export async function exampleExecuteSmartContract(): Promise<void> {
   console.log('  ✅ SC execute signed —', signed.base?.signature ? 'ok' : 'ERROR');
 
   // Send
-  // const result = await sendSmartContractExecuteTXN(signed, PROTONET_GRPC_CONFIG);
+  // const result = await sendSmartContractExecuteTXN(signed, MAINNET_GRPC_CONFIG);
   // console.log('  🎉 Sent:', result);
 }
 

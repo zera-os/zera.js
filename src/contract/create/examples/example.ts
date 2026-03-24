@@ -6,7 +6,44 @@
  * This file has not been fully tested and is for illustrative purposes only. It does not cover all validaity checks.
  */
 
-import { PROTONET_GRPC_CONFIG, MAINNET_GRPC_CONFIG } from '../../../shared/utils/testing-defaults/index.js';
+import { protoInt64, create } from '@bufbuild/protobuf';
+
+import { TimestampSchema } from '../../../../proto/generated/google/protobuf/timestamp_pb.js';
+import type { Timestamp } from '../../../../proto/generated/google/protobuf/timestamp_pb.js';
+import {
+  GOVERNANCE_TYPE,
+  PROPOSAL_PERIOD,
+  CONTRACT_FEE_TYPE,
+  CONTRACT_TYPE,
+  GovernanceSchema,
+  StageSchema,
+  RestrictedKeySchema,
+  PublicKeySchema,
+  ContractFeesSchema,
+  ExpenseRatioSchema,
+  PreMintWalletSchema,
+  CoinDenominationSchema,
+  KeyValuePairSchema,
+  TokenComplianceSchema,
+  ComplianceSchema,
+  MaxSupplyReleaseSchema
+} from '../../../../proto/generated/txn_pb.js';
+import type {
+  Governance,
+  RestrictedKey,
+  PublicKey,
+  ContractFees,
+  ExpenseRatio,
+  PreMintWallet,
+  CoinDenomination,
+  KeyValuePair,
+  TokenCompliance,
+  Compliance,
+  MaxSupplyRelease,
+  Stage
+} from '../../../../proto/generated/txn_pb.js';
+import { getPublicKeyBytes, sanitizeAndDecodeAddress } from '../../../shared/crypto/address-utils.js';
+import { MAINNET_GRPC_CONFIG } from '../../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS, TEST_WALLET_ADDRESSES } from '../../../test-utils/index.js';
 import type { CreateContractOptions } from '../../shared/types.js';
 import { 
@@ -18,6 +55,7 @@ import {
   convertDollarAmountToContractFee
 } from '../../shared/utils.js';
 import { createContract, sendCreateContract } from '../transaction.js';
+
 
 /**
  * Create a contract with configurable features
@@ -54,37 +92,12 @@ async function createContractExample(): Promise<void> {
     const memo = 'Creating contract with selected features';
 
     // ============================================
-    // Import required modules
-    // ============================================
-    const { create, protoInt64 } = await import('@bufbuild/protobuf');
-    const { 
-      GovernanceSchema, 
-      GOVERNANCE_TYPE,
-      PROPOSAL_PERIOD,
-      RestrictedKeySchema,
-      PublicKeySchema,
-      ContractFeesSchema,
-      CONTRACT_FEE_TYPE,
-      CONTRACT_TYPE,
-      ExpenseRatioSchema,
-      PreMintWalletSchema,
-      CoinDenominationSchema,
-      KeyValuePairSchema,
-      TokenComplianceSchema,
-      ComplianceSchema,
-      MaxSupplyReleaseSchema
-    } = await import('../../../../proto/generated/txn_pb.js');
-    const { TimestampSchema } = await import('../../../../proto/generated/google/protobuf/timestamp_pb.js');
-    const { getPublicKeyBytes, sanitizeAndDecodeAddress } = await import('../../../../src/shared/crypto/address-utils.js');
-
-    // ============================================
     // Build optional features based on flags
     // ============================================
     
     // Governance
-    let governance;
+    let governance: Governance | undefined;
     if (USE_GOVERNANCE) {
-      const { StageSchema } = await import('../../../../proto/generated/txn_pb.js');
 
       // Specify percentages in human-readable format (e.g., 50.5 for 50.5%)
       // Change this value to switch between governance types
@@ -208,7 +221,7 @@ async function createContractExample(): Promise<void> {
       const restrictedKey1Bytes = getPublicKeyBytes(restrictedKey1PublicKeyId);
       const restrictedKey1 = create(RestrictedKeySchema, {
         publicKey: create(PublicKeySchema, {
-          single: restrictedKey1Bytes
+          single: restrictedKey1Bytes as Uint8Array<ArrayBuffer>
         }),
         timeDelay: BigInt(86400), // 1 day delay
         global: true,
@@ -229,7 +242,7 @@ async function createContractExample(): Promise<void> {
       const restrictedKey2Bytes = getPublicKeyBytes(restrictedKey2PublicKeyId);
       const restrictedKey2 = create(RestrictedKeySchema, {
         publicKey: create(PublicKeySchema, {
-          single: restrictedKey2Bytes
+          single: restrictedKey2Bytes as Uint8Array<ArrayBuffer>
         }),
         timeDelay: BigInt(0),
         global: false,
@@ -328,12 +341,12 @@ async function createContractExample(): Promise<void> {
       
       premintWallets = [
         create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.alice), // Alice's address
+          address: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.alice) as Uint8Array<ArrayBuffer>, // Alice's address
           // Convert 1 token to parts
           amount: convertAmountToParts(1.0, contractId, denominationForConversion)
         }),
         create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.bob), // Bob's address
+          address: sanitizeAndDecodeAddress(TEST_WALLET_ADDRESSES.bob) as Uint8Array<ArrayBuffer>, // Bob's address
           // Convert 0.5 tokens to parts
           amount: convertAmountToParts(0.5, contractId, denominationForConversion)
         })
@@ -437,7 +450,7 @@ async function createContractExample(): Promise<void> {
       ...(USE_QUASH_THRESHOLD && { quashThreshold: 3 }),
       updateContractFees: USE_CONTRACT_FEES,
       updateExpenseRatio: USE_EXPENSE_RATIO,
-      grpcConfig: PROTONET_GRPC_CONFIG // Use test gRPC configuration
+      grpcConfig: MAINNET_GRPC_CONFIG // Use test gRPC configuration
     };
 
     console.log('Creating contract...');
@@ -464,7 +477,7 @@ async function createContractExample(): Promise<void> {
     
     // Send to network (uncomment to actually submit)
     // console.log('\nSubmitting contract to network...');
-    // const hash = await sendCreateContract(contract, PROTONET_GRPC_CONFIG);
+    // const hash = await sendCreateContract(contract, MAINNET_GRPC_CONFIG);
     // console.log(`✓ Contract submitted with hash: ${hash}`);
     
   } catch (error) {
@@ -505,38 +518,13 @@ async function first(): Promise<void> {
     const privateKeyBase58 = ED25519_TEST_KEYS.alice.privateKey;
     const feeId = '$ZRA+0000';
     const memo = 'literally nothing but being first';
-    
-    // ============================================
-    // Import required modules
-    // ============================================
-    const { create, protoInt64 } = await import('@bufbuild/protobuf');
-    const {
-      GovernanceSchema,
-      GOVERNANCE_TYPE,
-      PROPOSAL_PERIOD,
-      RestrictedKeySchema,
-      PublicKeySchema,
-      ContractFeesSchema,
-      CONTRACT_FEE_TYPE,
-      CONTRACT_TYPE,
-      ExpenseRatioSchema,
-      PreMintWalletSchema,
-      CoinDenominationSchema,
-      KeyValuePairSchema,
-      TokenComplianceSchema,
-      ComplianceSchema,
-      MaxSupplyReleaseSchema
-    } = await import('../../../../proto/generated/txn_pb.js');
-    const { TimestampSchema } = await import('../../../../proto/generated/google/protobuf/timestamp_pb.js');
-    const { getPublicKeyBytes, sanitizeAndDecodeAddress } = await import('../../../../src/shared/crypto/address-utils.js');
     // ============================================
     // Build optional features based on flags
     // ============================================
     
     // Governance
-    let governance;
+    let governance: Governance | undefined;
     if (USE_GOVERNANCE) {
-      const { StageSchema } = await import('../../../../proto/generated/txn_pb.js');
 
       // Specify percentages in human-readable format (e.g., 50.5 for 50.5%)
       // Change this value to switch between governance types
@@ -660,7 +648,7 @@ async function first(): Promise<void> {
       const restrictedKey1Bytes = getPublicKeyBytes(restrictedKey1PublicKeyId);
       const restrictedKey1 = create(RestrictedKeySchema, {
         publicKey: create(PublicKeySchema, {
-          single: restrictedKey1Bytes
+          single: restrictedKey1Bytes as Uint8Array<ArrayBuffer>
         }),
         //timeDelay: BigInt(86400), // 1 day delay
         global: false,
@@ -759,27 +747,27 @@ async function first(): Promise<void> {
       
       premintWallets = [
         create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('4xm3gAmp4WnWHFJmq1dmh6Nci6ncYFEoj3aAXW2LxUgh'),
+          address: sanitizeAndDecodeAddress('4xm3gAmp4WnWHFJmq1dmh6Nci6ncYFEoj3aAXW2LxUgh') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
         create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('EgzTZj6oaJX3yfNJ1qHHBfKrV8QLyJtmsSiAC7d24WFz'),
+          address: sanitizeAndDecodeAddress('EgzTZj6oaJX3yfNJ1qHHBfKrV8QLyJtmsSiAC7d24WFz') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
         create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('ALHSQw6sa8WMkKRoyhKiU2gbtkX6F16r1Dk2qZFGCb7o'),
+          address: sanitizeAndDecodeAddress('ALHSQw6sa8WMkKRoyhKiU2gbtkX6F16r1Dk2qZFGCb7o') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
         create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('8Qx2ccahAWvz5rgaJkyTR7gzEFYBeyKrmmDJfsiCqWST'),
+          address: sanitizeAndDecodeAddress('8Qx2ccahAWvz5rgaJkyTR7gzEFYBeyKrmmDJfsiCqWST') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
         create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('EYiudHzvJ3L85ximkbdnpobaX8D9eD46XuBEiPfY3ge2'),
+          address: sanitizeAndDecodeAddress('EYiudHzvJ3L85ximkbdnpobaX8D9eD46XuBEiPfY3ge2') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         }),
         create(PreMintWalletSchema, {
-          address: sanitizeAndDecodeAddress('DD191RJ8wKNDHihEtdWt3AdSqsWnJR5NnrX9TVihpLfX'),
+          address: sanitizeAndDecodeAddress('DD191RJ8wKNDHihEtdWt3AdSqsWnJR5NnrX9TVihpLfX') as Uint8Array<ArrayBuffer>,
           amount: convertAmountToParts(7000000000000000, contractId, denominationForConversion)
         })
       ];
@@ -923,11 +911,7 @@ async function first(): Promise<void> {
  */
 async function exampleManualNonce(): Promise<void> {
   try {
-    const { create } = await import('@bufbuild/protobuf');
-    const {
-      CONTRACT_TYPE,
-      CoinDenominationSchema
-    } = await import('../../../../proto/generated/txn_pb.js');
+    // CONTRACT_TYPE and CoinDenomination imported at file top
 
     // Minimal contract creation with manual nonce
     const coinDenomination = create(CoinDenominationSchema, {
@@ -946,7 +930,7 @@ async function exampleManualNonce(): Promise<void> {
       coinDenomination,
       maxSupply: '1000000000000000000000',
       memo: 'Contract with manual nonce',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network fetch
       // WARNING: Not validated! Incorrect nonce will cause transaction failure
       nonce: '10'
@@ -960,7 +944,7 @@ async function exampleManualNonce(): Promise<void> {
     console.log('WARNING: Manual nonce is not validated!');
 
     // Note: This will likely fail if the nonce is incorrect
-    // const hash = await sendCreateContract(contract, PROTONET_GRPC_CONFIG);
+    // const hash = await sendCreateContract(contract, MAINNET_GRPC_CONFIG);
     // console.log(`✓ Contract submitted with hash: ${hash}`);
 
   } catch (error) {
@@ -980,11 +964,7 @@ async function exampleManualNonce(): Promise<void> {
  */
 async function exampleFullyOffline(): Promise<void> {
   try {
-    const { create } = await import('@bufbuild/protobuf');
-    const {
-      CONTRACT_TYPE,
-      CoinDenominationSchema
-    } = await import('../../../../proto/generated/txn_pb.js');
+    // CONTRACT_TYPE and CoinDenomination imported at file top
 
     // Minimal contract creation with manual nonce and fee
     const coinDenomination = create(CoinDenominationSchema, {
@@ -1003,7 +983,7 @@ async function exampleFullyOffline(): Promise<void> {
       coinDenomination,
       maxSupply: '1000000000000000000000',
       memo: 'Fully offline contract creation',
-      grpcConfig: PROTONET_GRPC_CONFIG,
+      grpcConfig: MAINNET_GRPC_CONFIG,
       // Manual nonce - skips network nonce fetch
       nonce: '15',
       // Manual fee - skips fee calculation, used exactly as provided (no overestimation)

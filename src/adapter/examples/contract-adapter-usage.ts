@@ -6,7 +6,7 @@
  */
 
 import { sendCreateContract, sendUpdateContract } from '../../contract/index.js';
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS } from '../../test-utils/keys.test.js';
 import {
   buildContractTXN,
@@ -34,7 +34,7 @@ export async function exampleCreateContract(): Promise<void> {
     contractId: '$MYT+0000',
     publicKeyBase58Identifier: alice.publicKey,
     coinDenomination: {} as any, // would be a real CoinDenomination in production
-    grpcConfig: PROTONET_GRPC_CONFIG,
+    grpcConfig: MAINNET_GRPC_CONFIG,
     feeAmountParts: '1',
     nonce: '0'
   });
@@ -45,7 +45,7 @@ export async function exampleCreateContract(): Promise<void> {
   console.log('  ✅ Contract signed —', signed.base?.signature ? 'ok' : 'ERROR');
 
   // Send
-  // const result = await sendCreateContract(signed, PROTONET_GRPC_CONFIG);
+  // const result = await sendCreateContract(signed, MAINNET_GRPC_CONFIG);
   // console.log('  🎉 Sent:', result);
 }
 
@@ -64,7 +64,7 @@ export async function exampleUpdateContract(): Promise<void> {
     contractVersion: BigInt(1000001),
     publicKeyBase58Identifier: alice.publicKey,
     name: 'My Updated Token',
-    grpcConfig: PROTONET_GRPC_CONFIG,
+    grpcConfig: MAINNET_GRPC_CONFIG,
     feeAmountParts: '1',
     nonce: '1'
   });
@@ -73,6 +73,6 @@ export async function exampleUpdateContract(): Promise<void> {
   const signed = await signAndFinalize(unsigned, signer);
   console.log('  ✅ Update signed —', signed.base?.signature ? 'ok' : 'ERROR');
 
-  // const result = await sendUpdateContract(signed, PROTONET_GRPC_CONFIG);
+  // const result = await sendUpdateContract(signed, MAINNET_GRPC_CONFIG);
   // console.log('  🎉 Sent:', result);
 }

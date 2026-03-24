@@ -7,7 +7,7 @@
  * Run: npx tsx src/smart-contracts/use-cases/staking/examples/staking-operations.ts
  */
 
-import { PROTONET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
 import { ED25519_TEST_KEYS } from '../../../../test-utils/index.js';
 import { sendSmartContractExecuteTXN } from '../../../execute/index.js';
 import {
@@ -26,7 +26,7 @@ import {
 const publicKey = ED25519_TEST_KEYS.alice.publicKey;
 const privateKey = ED25519_TEST_KEYS.alice.privateKey;
 
-const grpcConfig = PROTONET_GRPC_CONFIG;
+const grpcConfig = MAINNET_GRPC_CONFIG;
 
 const STAKING_OPTIONS = {
   grpcConfig,

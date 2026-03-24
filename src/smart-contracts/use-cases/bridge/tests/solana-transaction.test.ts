@@ -81,8 +81,8 @@ describe('Solana Bridge Transaction Builders', () => {
         MOCK_PAYER
       );
 
-      // Should have: signature verifications + core + token instructions
-      const expectedCount = MOCK_SIGNATURES.length + 2;
+      // Should have: compute budget + signature verifications + core + token instructions
+      const expectedCount = MOCK_SIGNATURES.length + 3; // +3 = compute budget + core + token
       expect(result.transaction.instructions.length).toBe(expectedCount);
     });
   });

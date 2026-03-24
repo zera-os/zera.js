@@ -12,7 +12,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-import { PROTONET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
+import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { 
   ED25519_TEST_KEYS,
   TEST_WALLET_ADDRESSES
@@ -58,6 +58,7 @@ vi.mock('../../shared/fee-calculators/universal-fee-calculator.js', () => ({
 
 // Mock the token info service
 vi.mock('../../shared/utils/token-info.js', () => ({
+  normalizeContractId: vi.fn((id: string) => id),
   getTokenInfo: vi.fn().mockResolvedValue(new Map([
     ['$ZRA+0000', {
       contractId: '$ZRA+0000',
@@ -95,7 +96,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
         contractId,
         { baseFeeId: '$ZRA+0000' },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(txn).toBeDefined();
@@ -111,7 +112,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
         contractId,
         { baseFeeId: '$ZRA+0000' },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(UniversalFeeCalculator.calculateFee).toHaveBeenCalledWith(
@@ -130,7 +131,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
         contractId,
         { baseFeeId: '$ZRA+0000', needsInitialization: true },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(txn).toBeDefined();
@@ -146,7 +147,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
         contractId,
         { baseFeeId: '$ZRA+0000', needsInitialization: true },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(UniversalFeeCalculator.calculateFee).toHaveBeenCalledWith(
@@ -165,7 +166,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
         contractId,
         { baseFeeId: '$ZRA+0000', needsInitialization: false },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(txn).toBeDefined();
@@ -181,7 +182,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
         contractId,
         { baseFeeId: '$ZRA+0000', needsInitialization: false },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(UniversalFeeCalculator.calculateFee).toHaveBeenCalledWith(
@@ -200,7 +201,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
         contractId,
         { baseFeeId: '$ZRA+0000', overestimatePercent: 5 },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(txn).toBeDefined();
@@ -217,7 +218,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
           needsInitialization: true
         },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(txn).toBeDefined();
@@ -236,7 +237,7 @@ describe('New Token Balance Fee - needsInitialization Override', () => {
           needsInitialization: true
         },
         '',
-        PROTONET_GRPC_CONFIG
+        MAINNET_GRPC_CONFIG
       );
 
       expect(txn).toBeDefined();

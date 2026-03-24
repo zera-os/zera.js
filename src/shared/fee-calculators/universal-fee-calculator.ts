@@ -3,9 +3,11 @@
  * Handles network fees (base fees), contract-specific fees, and interface fees with automatic or manual specification
  */
 
+import { toBinary } from '@bufbuild/protobuf';
 import bs58 from 'bs58';
 
-import {
+import { CONTRACT_FEE_TYPE } from '../../../proto/generated/txn_pb.js';
+import type {
   CoinTXN,
   MintTXN,
   ItemizedMintTXN,
@@ -29,10 +31,10 @@ import {
   ValidatorHeartbeat,
   ProposalResult,
   RequiredVersion,
-  CONTRACT_FEE_TYPE,
   ContractFees
 } from '../../../proto/generated/txn_pb.js';
 import type { PublicKey } from '../../../proto/generated/txn_pb.js';
+import { getSchemaForTypeName } from '../../adapter/serialization.js';
 import { getTokenFeeInfo } from '../../api/handler/token-info/service.js';
 import { getBalance } from '../../api/validator/balance/service.js';
 import { getBaseFee } from '../../api/validator/base-fee/service.js';
@@ -50,7 +52,7 @@ import {
   toDecimal, 
   Decimal 
 } from '../utils/amount-utils.js';
-import { type TokenInfo } from '../utils/token-info.js';
+import { type TokenInfo, normalizeContractId } from '../utils/token-info.js';
 import { toSmallestUnits } from '../utils/unified-amount-conversion.js';
 
 import { 
@@ -95,7 +97,7 @@ export type TransactionMessage =
  * Type guard to check if an object is a CoinTXN
  */
 function isCoinTXN(obj: unknown): obj is CoinTXN {
-  return obj instanceof CoinTXN;
+  return !!(obj && typeof obj === 'object' && '$typeName' in obj && (obj as { $typeName: string }).$typeName === 'zera_txn.CoinTXN');
 }
 
 /**
@@ -198,29 +200,30 @@ export interface FeeConfigHelper<T extends TransactionMessage = TransactionMessa
  */
 function extractTransactionTypeFromProtoObject(protoObject: TransactionMessage): number {
   try {
-    if (protoObject instanceof CoinTXN) return TRANSACTION_TYPE.COIN_TYPE;
-    if (protoObject instanceof MintTXN) return TRANSACTION_TYPE.MINT_TYPE;
-    if (protoObject instanceof ItemizedMintTXN) return TRANSACTION_TYPE.ITEM_MINT_TYPE;
-    if (protoObject instanceof InstrumentContract) return TRANSACTION_TYPE.CONTRACT_TXN_TYPE;
-    if (protoObject instanceof GovernanceVote) return TRANSACTION_TYPE.VOTE_TYPE;
-    if (protoObject instanceof GovernanceProposal) return TRANSACTION_TYPE.PROPOSAL_TYPE;
-    if (protoObject instanceof SmartContractTXN) return TRANSACTION_TYPE.SMART_CONTRACT_TYPE;
-    if (protoObject instanceof SmartContractExecuteTXN) return TRANSACTION_TYPE.SMART_CONTRACT_EXECUTE_TYPE;
-    if (protoObject instanceof ExpenseRatioTXN) return TRANSACTION_TYPE.EXPENSE_RATIO_TYPE;
-    if (protoObject instanceof NFTTXN) return TRANSACTION_TYPE.NFT_TYPE;
-    if (protoObject instanceof ContractUpdateTXN) return TRANSACTION_TYPE.UPDATE_CONTRACT_TYPE;
-    if (protoObject instanceof ValidatorRegistration) return TRANSACTION_TYPE.VALIDATOR_REGISTRATION_TYPE;
-    if (protoObject instanceof ValidatorHeartbeat) return TRANSACTION_TYPE.VALIDATOR_HEARTBEAT_TYPE;
-    if (protoObject instanceof ProposalResult) return TRANSACTION_TYPE.PROPOSAL_RESULT_TYPE;
-    if (protoObject instanceof DelegatedTXN) return TRANSACTION_TYPE.DELEGATED_VOTING_TYPE;
-    if (protoObject instanceof RevokeTXN) return TRANSACTION_TYPE.REVOKE_TYPE;
-    if (protoObject instanceof QuashTXN) return TRANSACTION_TYPE.QUASH_TYPE;
-    if (protoObject instanceof FastQuorumTXN) return TRANSACTION_TYPE.FAST_QUORUM_TYPE;
-    if (protoObject instanceof ComplianceTXN) return TRANSACTION_TYPE.COMPLIANCE_TYPE;
-    if (protoObject instanceof BurnSBTTXN) return TRANSACTION_TYPE.SBT_BURN_TYPE;
-    if (protoObject instanceof RequiredVersion) return TRANSACTION_TYPE.REQUIRED_VERSION;
-    if (protoObject instanceof SmartContractInstantiateTXN) return TRANSACTION_TYPE.SMART_CONTRACT_INSTANTIATE_TYPE;
-    if (protoObject instanceof AllowanceTXN) return TRANSACTION_TYPE.ALLOWANCE_TYPE;
+    const typeName = (protoObject as { $typeName?: string }).$typeName;
+    if (typeName === 'zera_txn.CoinTXN') return TRANSACTION_TYPE.COIN_TYPE;
+    if (typeName === 'zera_txn.MintTXN') return TRANSACTION_TYPE.MINT_TYPE;
+    if (typeName === 'zera_txn.ItemizedMintTXN') return TRANSACTION_TYPE.ITEM_MINT_TYPE;
+    if (typeName === 'zera_txn.InstrumentContract') return TRANSACTION_TYPE.CONTRACT_TXN_TYPE;
+    if (typeName === 'zera_txn.GovernanceVote') return TRANSACTION_TYPE.VOTE_TYPE;
+    if (typeName === 'zera_txn.GovernanceProposal') return TRANSACTION_TYPE.PROPOSAL_TYPE;
+    if (typeName === 'zera_txn.SmartContractTXN') return TRANSACTION_TYPE.SMART_CONTRACT_TYPE;
+    if (typeName === 'zera_txn.SmartContractExecuteTXN') return TRANSACTION_TYPE.SMART_CONTRACT_EXECUTE_TYPE;
+    if (typeName === 'zera_txn.ExpenseRatioTXN') return TRANSACTION_TYPE.EXPENSE_RATIO_TYPE;
+    if (typeName === 'zera_txn.NFTTXN') return TRANSACTION_TYPE.NFT_TYPE;
+    if (typeName === 'zera_txn.ContractUpdateTXN') return TRANSACTION_TYPE.UPDATE_CONTRACT_TYPE;
+    if (typeName === 'zera_txn.ValidatorRegistration') return TRANSACTION_TYPE.VALIDATOR_REGISTRATION_TYPE;
+    if (typeName === 'zera_txn.ValidatorHeartbeat') return TRANSACTION_TYPE.VALIDATOR_HEARTBEAT_TYPE;
+    if (typeName === 'zera_txn.ProposalResult') return TRANSACTION_TYPE.PROPOSAL_RESULT_TYPE;
+    if (typeName === 'zera_txn.DelegatedTXN') return TRANSACTION_TYPE.DELEGATED_VOTING_TYPE;
+    if (typeName === 'zera_txn.RevokeTXN') return TRANSACTION_TYPE.REVOKE_TYPE;
+    if (typeName === 'zera_txn.QuashTXN') return TRANSACTION_TYPE.QUASH_TYPE;
+    if (typeName === 'zera_txn.FastQuorumTXN') return TRANSACTION_TYPE.FAST_QUORUM_TYPE;
+    if (typeName === 'zera_txn.ComplianceTXN') return TRANSACTION_TYPE.COMPLIANCE_TYPE;
+    if (typeName === 'zera_txn.BurnSBTTXN') return TRANSACTION_TYPE.SBT_BURN_TYPE;
+    if (typeName === 'zera_txn.RequiredVersion') return TRANSACTION_TYPE.REQUIRED_VERSION;
+    if (typeName === 'zera_txn.SmartContractInstantiateTXN') return TRANSACTION_TYPE.SMART_CONTRACT_INSTANTIATE_TYPE;
+    if (typeName === 'zera_txn.AllowanceTXN') return TRANSACTION_TYPE.ALLOWANCE_TYPE;
     
     // If we can't determine the type, throw an error
     throw new Error('Unable to determine transaction type from protoObject structure');
@@ -332,9 +335,17 @@ function calculateTotalTransactionSize(protoObject: TransactionMessage): number 
     throw new Error('detectedTransactionType is null or undefined');
   }
   
-  // Get the serialized size of the protobuf object using .toBinary()
+  // Get the serialized size of the protobuf object using v2 schema-based toBinary
+  const typeName = (protoObject as { $typeName?: string }).$typeName;
+  if (!typeName) {
+    throw new Error('Cannot serialize transaction: missing $typeName property');
+  }
+  const schema = getSchemaForTypeName(typeName);
+  if (!schema) {
+    throw new Error(`Cannot serialize transaction: no schema found for type "${typeName}"`);
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const binary = (protoObject as any).toBinary();
+  const binary = toBinary(schema as any, protoObject as any);
   const protoSize = binary.length;
   
   // Auto-detect key types from transaction
@@ -590,9 +601,13 @@ function calculateGasFee(
     throw new Error(`Token info not found for fee ID ${baseFeeId} when calculating gas fee`);
   }
 
+  // Non-native fee instruments (anything other than $ZRA+0000) incur a 10x cost multiplier
+  const NON_NATIVE_FEE_MULTIPLIER = 10;
+  const feeMultiplier = baseFeeId !== '$ZRA+0000' ? NON_NATIVE_FEE_MULTIPLIER : 1;
+
   // Gas fee is provided in USD (e.g., 0.50 for 50 cents)
   // Scale to 1e18 for precision: convert USD to scaled cents (multiply by 100 to get cents, then by 1e18)
-  const gasFeeInUsdScaled = new Decimal(gasFeeInUsd).mul(1e18);
+  const gasFeeInUsdScaled = new Decimal(gasFeeInUsd).mul(1e18).mul(feeMultiplier);
   
   // Convert USD cents to fee token units using exchange rate
   // Exchange rate is stored as: 1 fee token = X USD cents
@@ -720,13 +735,17 @@ async function calculateNetworkFee(
   // Capture the new wallet fee from the API response (1e18 = $1.00 format)
   const newWalletFeeScaled = baseFeeResponse.newWalletFee || '0';
   
+  // Non-native fee instruments (anything other than $ZRA+0000) incur a 10x cost multiplier
+  const NON_NATIVE_FEE_MULTIPLIER = 10;
+  const feeMultiplier = baseFeeId !== '$ZRA+0000' ? NON_NATIVE_FEE_MULTIPLIER : 1;
+
   // API returns fees in 1e18 = $1.00 format, convert to USD
   // byte_fee is per-byte, key_fee is the total key+hash fee for this signer
   const perByteFee = new Decimal(baseFeeResponse.byteFee || '0').div(new Decimal(10).pow(18));
-  const totalKeyAndHashFees = new Decimal(baseFeeResponse.keyFee || '0').div(new Decimal(10).pow(18));
+  const totalKeyAndHashFees = new Decimal(baseFeeResponse.keyFee || '0').div(new Decimal(10).pow(18)).mul(feeMultiplier);
 
-  // Calculate initial base network fee: transaction size * per-byte fee
-  const baseNetworkFeeEquiv = toDecimal(transactionSize).mul(perByteFee);
+  // Calculate initial base network fee: transaction size * per-byte fee (with non-native multiplier)
+  const baseNetworkFeeEquiv = toDecimal(transactionSize).mul(perByteFee).mul(feeMultiplier);
   
   // Calculate initial total network fee: base fee + key fees + hash fees
   const totalNetworkFeeScaled = baseNetworkFeeEquiv.add(totalKeyAndHashFees).mul(1e18);
@@ -779,8 +798,8 @@ async function calculateNetworkFee(
     // Add the size difference to transaction size
     const correctedTransactionSize = transactionSize + feeSizeDifference;
     
-    // Recalculate base network fee with corrected size
-    const correctedBaseNetworkFeeEquiv = toDecimal(correctedTransactionSize).mul(perByteFee);
+    // Recalculate base network fee with corrected size (with non-native multiplier)
+    const correctedBaseNetworkFeeEquiv = toDecimal(correctedTransactionSize).mul(perByteFee).mul(feeMultiplier);
     
     // Recalculate total network fee
     const correctedTotalNetworkFeeEquiv = correctedBaseNetworkFeeEquiv.add(totalKeyAndHashFees).mul(1e18);
@@ -792,7 +811,7 @@ async function calculateNetworkFee(
     const correctedRoundedFee = correctedTotalNetworkFee.mul(precisionMultiplier).floor().div(precisionMultiplier);
     
     // Update the fee in smallest units with precise denomination-based precision
-    transactionAmount = toSmallestUnits(correctedRoundedFee.toString(), baseFeeId);
+    transactionAmount = toSmallestUnits(correctedRoundedFee.toString(), baseFeeId, conversionOptions);
     
     // Update transaction size for return value
     transactionSize = correctedTransactionSize;
@@ -914,8 +933,11 @@ async function calculateNewTokenBalanceFee(
 
   // 4. Calculate new wallet fee per address in the base fee token's smallest units
   // newWalletFeeScaled is in 1e18 = $1.00 format from the BaseFee API
+  // Non-native fee instruments (anything other than $ZRA+0000) incur a 10x cost multiplier
+  const NON_NATIVE_FEE_MULTIPLIER = 10;
+  const feeMultiplier = baseFeeId !== '$ZRA+0000' ? NON_NATIVE_FEE_MULTIPLIER : 1;
   const feePerAddressScaled = new Decimal(newWalletFeeScaled);
-  const totalFeeScaled = feePerAddressScaled.mul(addressesWithoutBalance);
+  const totalFeeScaled = feePerAddressScaled.mul(addressesWithoutBalance).mul(feeMultiplier);
 
   // Convert USD to base fee token smallest units using exchange rate
   const tokenInfo = tokenInfoMap.get(baseFeeId);
@@ -975,8 +997,8 @@ export class UniversalFeeCalculator {
   static async calculateFee<T extends TransactionMessage>(
     options: FeeConfigHelper<T>
   ): Promise<T> {
-    // Ensure base fee id default
-    const effectiveBaseFeeId = options.baseFeeId || '$ZRA+0000';
+    // Ensure base fee id default and normalize casing
+    const effectiveBaseFeeId = normalizeContractId(options.baseFeeId || '$ZRA+0000');
 
     // Ensure tokenInfoMap includes base fee token info
     const workingTokenInfoMap: Map<string, TokenInfo> = options.tokenInfoMap || new Map<string, TokenInfo>();
@@ -989,6 +1011,11 @@ export class UniversalFeeCalculator {
         }, options.grpcConfig);
         for (const token of response.tokens) {
           workingTokenInfoMap.set(token.contractId, token);
+          // Also store under normalized form if API-returned case differs
+          const normalized = normalizeContractId(token.contractId);
+          if (normalized !== token.contractId) {
+            workingTokenInfoMap.set(normalized, token);
+          }
         }
       } catch {
         // If we cannot fetch, proceed; downstream will error with a precise message if needed
