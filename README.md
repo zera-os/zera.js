@@ -1,127 +1,151 @@
-# zera.js
+<p align="center">
+  <strong>zera.js</strong>
+</p>
 
-JavaScript SDK for the ZERA Network.
+<p align="center">
+  The JavaScript SDK for the ZERA Network
+</p>
 
-## Overview
-
-`zera.js` provides everything you need to build on ZERA — wallet creation, transactions, smart contracts, DEX operations, cross-chain bridging, and governance voting. Written in TypeScript with full type safety.
-
----
-
-### 🌍 Built by the Community, for the Community
-
-**ZERA Open Source (ZERA-OS) isn't run by a company — it's run by you.**
-
-Every line of code in this repo comes from community members like you. There is no inner circle. No gatekeeping. If you can write code, review a PR, file an issue, or share an idea — you already belong here.
-
-- **Pull the repo** — explore, experiment, build on top of it
-- **Submit a PR** — every contribution matters, from typos to new modules
-- **Become a maintainer** — consistent contributors are invited to be maintainers.
-
-ZERA-OS isn't governed by a board, bound by a foundation, or even bound by ZERA's Governance. There's no roadmap handed down from above — just developers building what they want to build and sharing it with the world. This is open source — no strings attached.
-
-> **The more builders there are, the stronger this tooling becomes. Start anywhere. Start today.**
+<p align="center">
+  <a href="https://www.npmjs.com/package/@zera-os/zera.js"><img src="https://img.shields.io/npm/v/@zera-os/zera.js?style=flat-square&color=0a0a0a" alt="npm version"></a>
+  <a href="https://github.com/zera-os/zera.js/blob/main/LICENSE"><img src="https://img.shields.io/github/license/zera-os/zera.js?style=flat-square&color=0a0a0a" alt="license"></a>
+  <a href="https://www.npmjs.com/package/@zera-os/zera.js"><img src="https://img.shields.io/npm/dm/@zera-os/zera.js?style=flat-square&color=0a0a0a" alt="downloads"></a>
+</p>
 
 ---
 
-## Installation
+Build wallets. Send transactions. Deploy contracts. Bridge cross-chain. And More. All from JavaScript.
+
+`zera.js` is a typed, modular SDK that gives you tools to build on the ZERA Network — from HD wallet generation to DEX operations to cross-chain bridging with Solana. It works in Node.js, React Native, and modern browsers.
 
 ```bash
 npm install @zera-os/zera.js
 ```
 
-> Works with Node.js, React Native, and modern browsers.
+## Quick Start
 
-## Project Structure
+```typescript
+import {
+  createWallet,
+  createCoinTXN,
+  submitTransaction,
+} from "@zera-os/zera.js";
 
-Most modules include a `README.md` with documentation and an `examples/` directory with runnable code you can execute directly with `tsx`.
+// Create an HD wallet
+const wallet = await createWallet({
+  keyType: "ed25519",
+  hashType: "sha3",
+});
+
+// Build a transaction
+const txn = await createCoinTXN(
+  [{ address: wallet.address, amount: "100" }],
+  [{ address: recipientAddress, amount: "100" }],
+  "$ZRA+0000",
+);
+
+// Submit to the network
+await submitTransaction(txn);
+```
+
+## What You Can Build
+
+**Wallets** — Generate BIP39 mnemonic phrases, derive HD wallets with SLIP-0010, support Ed25519 and Ed448 key types.
+
+**Transactions** — Build, sign, and submit coin transfers with automatic fee calculation, multi-input/output support, and token allowances.
+
+**Smart Contracts** — Create, update, and execute smart contracts with typed parameters.
+
+**DEX** — Create liquidity pools, add/remove liquidity, execute swaps, and manage LP tokens.
+
+**Cross-Chain Bridge** — Lock and unlock assets between ZERA and Solana with guardian support.
+
+**Governance** — Cast votes on network proposals.
+
+**Network Queries** — Fetch balances, nonces, exchange rates, and token information from validators.
+
+## Architecture
+
+The SDK is organized into focused, independently documented modules. Each module contains its own README and runnable examples. Below for illustrative purposes only and may not be current:
 
 ```
 src/
-├── wallet-creation/        # HD wallet generation & key management
-│   └── examples/           #   → basic-usage.ts
-│
-├── coin-txn/               # Transaction building & signing
-│   └── examples/           #   → real-world-usage.ts
-│
-├── contract/               # Smart contract creation & updates
-│   ├── create/examples/    #   → full contract creation example
-│   └── update/examples/    #   → contract update example
-│
-├── smart-contracts/        # Smart contract execution
+├── wallet-creation/     HD wallet generation & key management
+├── coin-txn/            Transaction building & signing
+├── contract/            Smart contract creation & updates
+├── smart-contracts/     Contract execution & use cases
 │   └── use-cases/
-│       ├── dex/            # DEX: pools, liquidity, swaps, LP
-│       │   └── examples/   #   → dex-operations.ts
-│       └── bridge/         # Cross-chain: ZERA ↔ Solana
-│           ├── zera/examples/
-│           ├── solana/examples/
-│           └── guardian/examples/
-│
-├── vote/                   # Governance proposal voting
-│   └── examples/           #   → basic-vote-example.ts
-│
-├── api/                    # Validator API (nonce, fees, balances)
-│   └── validator/
-│       ├── balance/examples/
-│       ├── fee-info/examples/
-│       └── nonce/examples/
-│
-├── grpc/                   # ConnectRPC transport layer
-│   └── examples/           #   → universal-grpc-examples.ts
-│
-└── shared/                 # Crypto utils, validation, monitoring
-    └── utils/examples/
+│       ├── dex/         Pools, liquidity, swaps
+│       ├── bridge/      ZERA ↔ Solana bridging
+│       └── staking/     Staking operations
+├── vote/                Governance voting
+├── sign/                Universal signing interface
+├── adapter/             Wallet adapters & serialization
+├── api/                 Validator API clients
+├── grpc/                ConnectRPC transport layer
+└── shared/              Crypto primitives, validation, utilities
 ```
 
-### Running Examples
+## Module Documentation
+
+Each module has its own detailed docs. Start with whatever you're building:
+
+| Building...          | Start here                                                                                           |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| Wallets & keys       | [`src/wallet-creation/README.md`](./src/wallet-creation/README.md)                                   |
+| Coin transfers       | [`src/coin-txn/README.md`](./src/coin-txn/README.md)                                                 |
+| DEX integrations     | [`src/smart-contracts/use-cases/dex/README.md`](./src/smart-contracts/use-cases/dex/README.md)       |
+| Cross-chain bridging | [`src/smart-contracts/use-cases/bridge/README.md`](./src/smart-contracts/use-cases/bridge/README.md) |
+| Network queries      | [`src/api/README.md`](./src/api/README.md)                                                           |
+| gRPC transport       | [`src/grpc/README.md`](./src/grpc/README.md)                                                         |
+| Shared utilities     | [`src/shared/README.md`](./src/shared/README.md)                                                     |
+
+## Running Examples
+
+Most modules include an `examples/` directory with code you can run directly:
 
 ```bash
 npx tsx src/wallet-creation/examples/basic-usage.ts
 npx tsx src/coin-txn/examples/real-world-usage.ts
 npx tsx src/smart-contracts/use-cases/dex/examples/dex-operations.ts
+npx tsx src/vote/examples/basic-vote-example.ts
 ```
 
-## Module Documentation
+## Cryptography
 
-| Module          | README                                                     | What it covers                                             |
-| --------------- | ---------------------------------------------------------- | ---------------------------------------------------------- |
-| Wallet Creation | [README](./src/wallet-creation/README.md)                  | BIP39 mnemonics, Ed25519 & Ed448, SLIP-0010, HD derivation |
-| Transactions    | [README](./src/coin-txn/README.md)                         | Transfers, multi-input/output, allowances, auto fee calc   |
-| DEX             | [README](./src/smart-contracts/use-cases/dex/README.md)    | Pool creation, liquidity, swaps, LP management             |
-| Bridge          | [README](./src/smart-contracts/use-cases/bridge/README.md) | Cross-chain transfers between ZERA and Solana              |
-| API             | [README](./src/api/README.md)                              | Validator API, nonce, token info, fee queries              |
-| gRPC            | [README](./src/grpc/README.md)                             | ConnectRPC transport, protobuf clients                     |
-| Shared          | [README](./src/shared/README.md)                           | Crypto, validation, monitoring                             |
+The SDK uses audited, standards-compliant cryptographic libraries — no custom crypto.
+
+| Standard  | Purpose                            |
+| --------- | ---------------------------------- |
+| Ed25519   | Default signing (FIPS 186-4)       |
+| Ed448     | High-security signing (FIPS 186-5) |
+| SHA3      | Address hashing (FIPS 202)         |
+| BLAKE3    | High-performance hashing           |
+| BIP39     | Mnemonic phrase generation         |
+| SLIP-0010 | EdDSA HD key derivation            |
+
+Key pairs and signatures are handled by [`@noble/curves`](https://github.com/paulmillr/noble-curves) and [`@noble/hashes`](https://github.com/paulmillr/noble-hashes) — independently audited, zero-dependency libraries.
 
 ## Development
 
 ```bash
-# Install dependencies
-npm install
-
-# Generate protobuf types
-npm run build:proto
-
-# Run tests
-npm test
-
-# Type check
-npm run type-check
-
-# Lint
-npm run lint
+npm install            # Install dependencies
+npm run build:proto    # Generate protobuf types
+npm run build          # Build the SDK
+npm test               # Run the test suite
+npm run type-check     # Verify types
+npm run lint           # Lint the codebase
 ```
 
-## Cryptographic Standards
+The SDK builds to both CommonJS and ESM targets with full TypeScript declarations.
 
-| Standard  | Usage                                   |
-| --------- | --------------------------------------- |
-| Ed25519   | Default signing (NIST FIPS 186-4)       |
-| Ed448     | High-security signing (NIST FIPS 186-5) |
-| SHA3      | Address hashing (NIST FIPS 202)         |
-| BLAKE3    | High-performance hashing                |
-| BIP39     | Mnemonic generation                     |
-| SLIP-0010 | EdDSA HD wallet derivation              |
+## Contributing
+
+ZERA-OS is community-run. There's no company behind it, no inner circle, no gatekeeping.
+
+If you can write code, review a PR, file an issue, or share an idea — you belong here. Consistent contributors are invited to become maintainers.
+
+> The more builders there are, the stronger this tooling becomes. Start anywhere. Start today.
 
 ## License
 
