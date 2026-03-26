@@ -9,7 +9,7 @@
  * 
  * @version 1.0.0
  * @author ZERA Community
- * @license MIT
+ * @license Apache-2.0
  */
 
 // Import wallet creation functionality

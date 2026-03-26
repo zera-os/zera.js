@@ -149,4 +149,4 @@ If you can write code, review a PR, file an issue, or share an idea — you belo
 
 ## License
 
-[MIT](./LICENSE) — ZERA Community
+[Apache 2.0](./LICENSE) — ZERA Community
