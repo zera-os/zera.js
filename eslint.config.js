@@ -76,6 +76,9 @@ export default [
           '**/tests/**/*',
           '**/examples/**/*',
           '**/scripts/**/*',
+          'src/test-reporter.ts',
+          'src/test-setup.ts',
+          'test-runner.ts',
           '**/vitest.config.ts',
           '**/vitest.setup.ts'
         ]

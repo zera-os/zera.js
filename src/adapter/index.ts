@@ -43,7 +43,7 @@ export {
 // ============================================================================
 
 // CoinTXN
-export { buildCoinTXN, type CoinTXNBuildInput } from '../coin-txn/transaction.js';
+export { buildCoinTXN, type CoinTXNBuildInput, type CoinTXNBuildOptions } from '../coin-txn/transaction.js';
 
 // GovernanceVote
 export { buildVoteTXN, sendVoteTXN, type BuildVoteTXNOptions } from '../vote/transaction.js';
@@ -119,4 +119,3 @@ export type {
   ZeraWCSignMessageResult,
   ZeraWCGetAccountsResult
 } from './walletconnect.js';
-

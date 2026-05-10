@@ -70,9 +70,23 @@ export {
 
 // Import Bridge functionality (ZERA chain lock/unlock)
 export {
+  lockZera,
+  lockZeraAndSend,
+  burnSol,
+  burnSolAndSend,
+  releaseZera,
+  releaseZeraAndSend,
+  mintSol,
+  mintSolAndSend,
+  createSol,
+  createSolAndSend,
   bridgeZeraToSol,
   bridgeZeraToSolAndSend,
-  type BridgeZeraOptions
+  type BridgeZeraOptions,
+  type BurnSolOptions,
+  type ReleaseZeraOptions,
+  type MintSolOptions,
+  type CreateSolOptions
 } from './src/smart-contracts/use-cases/bridge/zera/index.js';
 
 // Import Solana Bridge functionality (instruction builders)
@@ -83,6 +97,9 @@ export * as guardianBridge from './src/smart-contracts/use-cases/bridge/guardian
 
 // Import Staking functionality
 export * as staking from './src/smart-contracts/use-cases/staking/index.js';
+
+// Import Bootstrapping functionality
+export * as bootstrapping from './src/smart-contracts/use-cases/bootstrapping/index.js';
 
 // Import Vote functionality
 export {
@@ -123,6 +140,7 @@ export {
   WalletSigner,
   DeepLinkSigner,
   type CoinTXNBuildInput,
+  type CoinTXNBuildOptions,
   type BuildVoteTXNOptions,
   type BuildContractOptions,
   type BuildContractUpdateOptions,
@@ -157,6 +175,11 @@ export {
 } from './src/api/validator/balance/service.js';
 
 export {
+  getBaseFee,
+  type EnhancedBaseFeeResponse
+} from './src/api/validator/base-fee/service.js';
+
+export {
   getExchangeRate
 } from './src/api/handler/fee-info/service.js';
 
@@ -174,15 +197,24 @@ export {
 export type { TokenFeeInfoResponse } from './src/shared/utils/token-info.js';
 
 export {
+  TRANSACTION_TYPE
+} from './proto/generated/txn_pb.js';
+
+export {
   toSmallestUnits,
   fromSmallestUnits
 } from './src/shared/utils/unified-amount-conversion.js';
 
 // Universal transaction submission (routes any protobuf TXN to the correct RPC method)
 export {
+  createTransactionClient,
   submitTransaction,
   type AnyZeraTransaction
 } from './src/grpc/index.js';
+
+export {
+  createClient as createGrpcClient
+} from './src/grpc/client-factory.js';
 
 // Export validation utilities
 export {
