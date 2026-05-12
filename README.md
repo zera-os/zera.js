@@ -56,6 +56,8 @@ await submitTransaction(txn);
 
 **Smart Contracts** — Create, update, and execute smart contracts with typed parameters.
 
+**NFTs/SBTs** — Create NFT/SBT contracts, mint itemized assets, transfer NFT items, and burn SBT items.
+
 **DEX** — Create liquidity pools, add/remove liquidity, execute swaps, and manage LP tokens.
 
 **Cross-Chain Bridge** — Lock and unlock assets between ZERA and Solana with guardian support.
@@ -73,6 +75,7 @@ src/
 ├── wallet-creation/     HD wallet generation & key management
 ├── coin-txn/            Transaction building & signing
 ├── contract/            Smart contract creation & updates
+├── items/               NFT/SBT item minting, NFT transactions & SBT burns
 ├── smart-contracts/     Contract execution & use cases
 │   └── use-cases/
 │       ├── dex/         Pools, liquidity, swaps

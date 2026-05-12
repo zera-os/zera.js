@@ -107,6 +107,33 @@ export {
   type CreateVoteTXNOptions
 } from './src/vote/index.js';
 
+// Import NFT/SBT item functionality
+export {
+  buildItemizedMintTXN,
+  createItemizedMintTXN,
+  sendItemizedMintTXN,
+  buildItemMintTXN,
+  createItemMintTXN,
+  sendItemMintTXN,
+  buildNFTTXN,
+  createNFTTXN,
+  sendNFTTXN,
+  buildNFTTransferTXN,
+  createNFTTransferTXN,
+  sendNFTTransferTXN,
+  buildBurnSBTTXN,
+  createBurnSBTTXN,
+  sendBurnSBTTXN,
+  type BuildItemizedMintOptions,
+  type CreateItemizedMintOptions,
+  type BuildNFTTXNOptions,
+  type CreateNFTTXNOptions,
+  type BuildBurnSBTTXNOptions,
+  type CreateBurnSBTTXNOptions,
+  type ItemizedMintParameterInput,
+  type ItemContractFeesInput
+} from './src/items/index.js';
+
 // Import Contract functionality
 export {
   createContract,
@@ -197,7 +224,8 @@ export {
 export type { TokenFeeInfoResponse } from './src/shared/utils/token-info.js';
 
 export {
-  TRANSACTION_TYPE
+  TRANSACTION_TYPE,
+  CONTRACT_TYPE
 } from './proto/generated/txn_pb.js';
 
 export {

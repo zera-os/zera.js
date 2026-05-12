@@ -15,6 +15,9 @@ vi.mock('@connectrpc/connect', () => ({
     smartContractExecute: vi.fn().mockResolvedValue({}),
     contract: vi.fn().mockResolvedValue({}),
     contractUpdate: vi.fn().mockResolvedValue({}),
+    itemMint: vi.fn().mockResolvedValue({}),
+    nFT: vi.fn().mockResolvedValue({}),
+    burnSBT: vi.fn().mockResolvedValue({}),
     
     // Mock API Service methods
     nonce: vi.fn().mockResolvedValue({ nonce: '0' }),

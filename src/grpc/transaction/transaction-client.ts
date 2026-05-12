@@ -16,7 +16,10 @@ import type {
   GovernanceVote, 
   SmartContractExecuteTXN, 
   InstrumentContract, 
-  ContractUpdateTXN 
+  ContractUpdateTXN,
+  ItemizedMintTXN,
+  NFTTXN,
+  BurnSBTTXN
 } from '../../../proto/generated/txn_pb.js';
 import type { GRPCConfig } from '../../types/index.js';
 import { createClient } from '../client-factory.js';
@@ -61,6 +64,9 @@ export interface TransactionClient {
   submitSmartContractExecute(txn: SmartContractExecuteTXN): Promise<{ success: boolean }>;
   submitContract(contract: InstrumentContract): Promise<{ success: boolean }>;
   submitContractUpdate(update: ContractUpdateTXN): Promise<{ success: boolean }>;
+  submitItemizedMint(txn: ItemizedMintTXN): Promise<{ success: boolean }>;
+  submitNFT(txn: NFTTXN): Promise<{ success: boolean }>;
+  submitBurnSBT(txn: BurnSBTTXN): Promise<{ success: boolean }>;
 }
 
 // ============================================================================
@@ -159,6 +165,18 @@ class TransactionClientImpl implements TransactionClient {
 
   async submitContractUpdate(update: ContractUpdateTXN): Promise<{ success: boolean }> {
     return this.submitTransaction(update);
+  }
+
+  async submitItemizedMint(txn: ItemizedMintTXN): Promise<{ success: boolean }> {
+    return this.submitTransaction(txn);
+  }
+
+  async submitNFT(txn: NFTTXN): Promise<{ success: boolean }> {
+    return this.submitTransaction(txn);
+  }
+
+  async submitBurnSBT(txn: BurnSBTTXN): Promise<{ success: boolean }> {
+    return this.submitTransaction(txn);
   }
 }
 

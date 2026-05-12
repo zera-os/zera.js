@@ -55,6 +55,20 @@ export { buildContractUpdateTXN, type BuildContractUpdateOptions } from '../cont
 // Smart Contract Execute
 export { buildSmartContractExecuteTXN, type BuildSmartContractExecuteOptions } from '../smart-contracts/execute/transaction.js';
 
+// NFT/SBT Item Transactions
+export {
+  buildItemizedMintTXN,
+  buildItemMintTXN,
+  buildNFTTXN,
+  buildNFTTransferTXN,
+  buildBurnSBTTXN,
+  type BuildItemizedMintOptions,
+  type BuildNFTTXNOptions,
+  type BuildBurnSBTTXNOptions,
+  type ItemizedMintParameterInput,
+  type ItemContractFeesInput
+} from '../items/transaction.js';
+
 // Re-export types needed for building transactions
 export type { ExecuteParameter, ParameterType } from '../smart-contracts/execute/transaction.js';
 export type { CreateContractOptions, UpdateContractOptions } from '../contract/shared/types.js';

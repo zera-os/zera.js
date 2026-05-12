@@ -237,6 +237,9 @@ The adapter works with **all** SDK transaction builders:
 | `buildContractTXN()`             | Contract deployment  |
 | `buildContractUpdateTXN()`       | Contract updates     |
 | `buildSmartContractExecuteTXN()` | Smart contract calls |
+| `buildItemizedMintTXN()`         | NFT/SBT item minting |
+| `buildNFTTXN()`                  | NFT item transactions |
+| `buildBurnSBTTXN()`              | SBT item burns       |
 
 The pattern is always the same:
 
