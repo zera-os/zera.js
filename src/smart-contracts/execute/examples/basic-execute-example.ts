@@ -221,3 +221,16 @@ async function exampleFullyOffline() {
   console.log('  Manual fee: 500000000 (0.5 ZRA) - used exactly, no overestimation');
   console.log('  WARNING: These values are not validated!');
 }
+
+async function main() {
+  await exampleFullyOffline();
+
+  if (process.env.ZERA_SUBMIT_EXAMPLES === 'true') {
+    await exampleExecuteNoParams();
+  } else {
+    console.log('');
+    console.log('Set ZERA_SUBMIT_EXAMPLES=true to run a live submit example.');
+  }
+}
+
+void main();

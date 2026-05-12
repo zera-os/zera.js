@@ -62,11 +62,40 @@ export {
 
 // Import Smart Contract Execute functionality
 export {
+  buildSmartContractExecuteTXN,
   createSmartContractExecuteTXN,
+  sendSmartContractExecuteTXN,
   type ExecuteParameter,
   type ParameterType,
+  type BuildSmartContractExecuteOptions,
+  type CreateSmartContractExecuteOptions,
   ParamType
 } from './src/smart-contracts/execute/index.js';
+
+// Import Smart Contract Deploy functionality
+export {
+  buildSmartContractTXN,
+  buildSmartContractDeployTXN,
+  createSmartContractTXN,
+  createSmartContractDeployTXN,
+  sendSmartContractTXN,
+  sendSmartContractDeployTXN,
+  type SmartContractCodeInput,
+  type BuildSmartContractTXNOptions,
+  type CreateSmartContractTXNOptions,
+  type BuildSmartContractDeployTXNOptions,
+  type CreateSmartContractDeployTXNOptions
+} from './src/smart-contracts/deploy/index.js';
+
+// Import Smart Contract Instantiate functionality
+export {
+  buildSmartContractInstantiateTXN,
+  createSmartContractInstantiateTXN,
+  sendSmartContractInstantiateTXN,
+  type InstantiateParameter,
+  type BuildSmartContractInstantiateTXNOptions,
+  type CreateSmartContractInstantiateTXNOptions
+} from './src/smart-contracts/instantiate/index.js';
 
 // Import Bridge functionality (ZERA chain lock/unlock)
 export {
@@ -159,7 +188,6 @@ export {
   buildVoteTXN,
   buildContractTXN,
   buildContractUpdateTXN,
-  buildSmartContractExecuteTXN,
   serializeTransaction,
   deserializeTransaction,
   getRegisteredTypes,
@@ -171,7 +199,6 @@ export {
   type BuildVoteTXNOptions,
   type BuildContractOptions,
   type BuildContractUpdateOptions,
-  type BuildSmartContractExecuteOptions,
   type SerializedTransaction,
   type WalletAdapterConfig,
   type WalletAdapterEvent,
@@ -225,7 +252,8 @@ export type { TokenFeeInfoResponse } from './src/shared/utils/token-info.js';
 
 export {
   TRANSACTION_TYPE,
-  CONTRACT_TYPE
+  CONTRACT_TYPE,
+  LANGUAGE
 } from './proto/generated/txn_pb.js';
 
 export {

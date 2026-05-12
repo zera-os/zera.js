@@ -7,99 +7,52 @@
  * `createSmartContractExecuteTXN()` is a convenience wrapper: build + sign with private key.
  */
 
-import { protoInt64, create } from '@bufbuild/protobuf';
+import { create } from '@bufbuild/protobuf';
 
-import { SmartContractExecuteTXNSchema, ParametersSchema } from '../../../proto/generated/txn_pb.js';
+import { SmartContractExecuteTXNSchema } from '../../../proto/generated/txn_pb.js';
 import type { SmartContractExecuteTXN } from '../../../proto/generated/txn_pb.js';
 import { validateKeyPair } from '../../contract/shared/utils.js';
-import { generateAddressFromPublicKey } from '../../shared/crypto/address-utils.js';
-import { UniversalFeeCalculator, type FeeConfigHelper } from '../../shared/fee-calculators/universal-fee-calculator.js';
-import { logger } from '../../shared/monitoring/index.js';
-import { buildStandardBaseTXN, getAddressAndNonce } from '../../shared/tx/base.js';
-import { MAINNET_GRPC_CONFIG } from '../../shared/utils/testing-defaults/index.js';
 import { signWithKey } from '../../sign/finalize.js';
 import type { GRPCConfig } from '../../types/index.js';
+import {
+  buildSmartContractBaseTXN,
+  calculateSmartContractFee,
+  type SmartContractBaseTXNOptions
+} from '../shared/base.js';
+import {
+  buildSmartContractParameters,
+  ParamType,
+  type ParameterType,
+  type SmartContractParameter
+} from '../shared/parameters.js';
+import {
+  validateSmartContractInstance,
+  validateSmartContractName
+} from '../shared/validation.js';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
 /**
- * Valid parameter types for smart contract execution.
- */
-export type ParameterType =
-  | 'bytes'
-  | 'uint32'
-  | 'uint64'
-  | 'string';
-
-/**
- * Helper constants for parameter types.
- */
-export const ParamType = {
-  BYTES: 'bytes' as const,
-  UINT32: 'uint32' as const,
-  UINT64: 'uint64' as const,
-  STRING: 'string' as const
-} as const;
-
-/**
  * Parameter for smart contract function execution.
  */
-export type ExecuteParameter = {
-  type: ParameterType | string;
-  value: string | Uint8Array | number | boolean;
-};
+export type ExecuteParameter = SmartContractParameter;
+
+export { ParamType, type ParameterType };
+
+/**
+ * Options for building an unsigned SmartContractExecuteTXN.
+ */
+export interface BuildSmartContractExecuteOptions extends SmartContractBaseTXNOptions {
+  /** Gas fee in USD */
+  gasFeeInUsd?: number;
+}
 
 /**
  * Options for creating a SmartContractExecute transaction.
  */
-export interface CreateSmartContractExecuteOptions {
-  memo?: string;
-  grpcConfig?: GRPCConfig;
-  gasFeeInUsd?: number;
-  overestimatePercent?: number;
-  nonce?: string | number | bigint;
-  feeId?: string;
-  feeAmountParts?: string;
-}
-
-/**
- * Options for building an unsigned SmartContractExecuteTXN.
- * Same as `CreateSmartContractExecuteOptions` but no private key is required.
- */
-export interface BuildSmartContractExecuteOptions {
-  /** Optional memo */
-  memo?: string;
-  /** gRPC configuration */
-  grpcConfig?: GRPCConfig;
-  /** Gas fee in USD */
-  gasFeeInUsd?: number;
-  /** Overestimate percentage for fee (defaults to 5.0%) */
-  overestimatePercent?: number;
-  /** Optional nonce override */
-  nonce?: string | number | bigint;
-  /** Fee ID (defaults to '$ZRA+0000') */
-  feeId?: string;
-  /** Manual fee amount in parts */
-  feeAmountParts?: string;
-}
-
-// ============================================================================
-// INTERNAL HELPERS
-// ============================================================================
-
-function toBytes(value: string | Uint8Array | number | boolean): Uint8Array<ArrayBuffer> {
-  if (value instanceof Uint8Array) return value as unknown as Uint8Array<ArrayBuffer>;
-  if (typeof value === 'string') return new Uint8Array(new TextEncoder().encode(value)) as unknown as Uint8Array<ArrayBuffer>;
-  if (typeof value === 'number') return new Uint8Array(new TextEncoder().encode(value.toString())) as unknown as Uint8Array<ArrayBuffer>;
-  if (typeof value === 'boolean') return new Uint8Array(new TextEncoder().encode(value ? '1' : '0')) as unknown as Uint8Array<ArrayBuffer>;
-  return new Uint8Array() as unknown as Uint8Array<ArrayBuffer>;
-}
-
-function toParameterBytes(value: string | Uint8Array | number | boolean): Uint8Array<ArrayBuffer> {
-  return toBytes(value);
-}
+export type CreateSmartContractExecuteOptions = BuildSmartContractExecuteOptions;
 
 // ============================================================================
 // PUBLIC API — BUILD UNSIGNED
@@ -136,49 +89,28 @@ export async function buildSmartContractExecuteTXN(
   publicKeyBase58Identifier: string,
   options: BuildSmartContractExecuteOptions = {}
 ): Promise<SmartContractExecuteTXN> {
-  if (!smartContractName) throw new Error('smartContractName is required');
+  validateSmartContractName(smartContractName);
+  validateSmartContractInstance(instance);
   if (!functionName) throw new Error('functionName is required');
-  if (!publicKeyBase58Identifier) throw new Error('publicKeyBase58Identifier is required');
-  generateAddressFromPublicKey(publicKeyBase58Identifier);
-
-  const grpcConfig = options.grpcConfig || MAINNET_GRPC_CONFIG;
-  const feeId = options.feeId;
-  const feeAmountParts = options.feeAmountParts;
-
-  let nonce: bigint;
-  if (options.nonce !== undefined) {
-    nonce = protoInt64.uParse(String(options.nonce));
-    logger.warn('Manual nonce specified - skipping network nonce fetch.', { operation: 'buildSmartContractExecuteTXN', nonce: String(options.nonce) });
-  } else {
-    const result = await getAddressAndNonce(publicKeyBase58Identifier, grpcConfig);
-    nonce = result.nonce;
+  if (!Array.isArray(parameters)) {
+    throw new Error('parameters must be an array');
   }
 
-  const baseParams: { publicKeyId: string; nonce: bigint; memo?: string; feeId?: string; feeAmountParts?: string } = { publicKeyId: publicKeyBase58Identifier, nonce };
-  if (options.memo) baseParams.memo = options.memo;
-  if (feeId !== undefined) baseParams.feeId = feeId;
-  if (feeAmountParts !== undefined) baseParams.feeAmountParts = feeAmountParts;
-  const base = buildStandardBaseTXN(baseParams);
+  const { base, grpcConfig, effectiveFeeId } = await buildSmartContractBaseTXN(
+    publicKeyBase58Identifier,
+    options,
+    'buildSmartContractExecuteTXN'
+  );
 
-  const protoParameters = parameters.map((p: ExecuteParameter) => {
-    const value = toParameterBytes(p.value);
-    return create(ParametersSchema, { value, type: p.type });
+  const executeTxn = create(SmartContractExecuteTXNSchema, {
+    base,
+    smartContractName,
+    function: functionName,
+    instance,
+    parameters: buildSmartContractParameters(parameters)
   });
 
-  const executeData: Record<string, unknown> = {
-    base, smartContractName, function: functionName,
-    instance: instance || 0, parameters: protoParameters
-  };
-  const executeTxn = create(SmartContractExecuteTXNSchema, executeData);
-  const effectiveFeeId = feeId || '$ZRA+0000';
-
-  const feeOptions: FeeConfigHelper<SmartContractExecuteTXN> = {
-    protoObject: executeTxn, tokenInfoMap: new Map(), baseFeeId: effectiveFeeId, grpcConfig,
-    ...(feeAmountParts !== undefined && { baseFee: feeAmountParts }),
-    ...(options.gasFeeInUsd !== undefined && { gasFeeInUsd: options.gasFeeInUsd }),
-    ...(options.overestimatePercent !== undefined && { overestimatePercent: options.overestimatePercent })
-  };
-  await UniversalFeeCalculator.calculateFee<SmartContractExecuteTXN>(feeOptions);
+  await calculateSmartContractFee(executeTxn, options, grpcConfig, effectiveFeeId);
 
   return executeTxn;
 }

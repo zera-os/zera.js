@@ -54,7 +54,7 @@ await submitTransaction(txn);
 
 **Transactions** — Build, sign, and submit coin transfers with automatic fee calculation, multi-input/output support, and token allowances.
 
-**Smart Contracts** — Create, update, and execute smart contracts with typed parameters.
+**Smart Contracts** — Deploy, instantiate, update, and execute smart contracts with typed parameters.
 
 **NFTs/SBTs** — Create NFT/SBT contracts, mint itemized assets, transfer NFT items, and burn SBT items.
 
@@ -97,6 +97,7 @@ Each module has its own detailed docs. Start with whatever you're building:
 | -------------------- | ---------------------------------------------------------------------------------------------------- |
 | Wallets & keys       | [`src/wallet-creation/README.md`](./src/wallet-creation/README.md)                                   |
 | Coin transfers       | [`src/coin-txn/README.md`](./src/coin-txn/README.md)                                                 |
+| Smart contracts      | [`src/smart-contracts/README.md`](./src/smart-contracts/README.md)                                   |
 | DEX integrations     | [`src/smart-contracts/use-cases/dex/README.md`](./src/smart-contracts/use-cases/dex/README.md)       |
 | Cross-chain bridging | [`src/smart-contracts/use-cases/bridge/README.md`](./src/smart-contracts/use-cases/bridge/README.md) |
 | Network queries      | [`src/api/README.md`](./src/api/README.md)                                                           |
@@ -110,6 +111,9 @@ Most modules include an `examples/` directory with code you can run directly:
 ```bash
 npx tsx src/wallet-creation/examples/basic-usage.ts
 npx tsx src/coin-txn/examples/real-world-usage.ts
+npx tsx src/smart-contracts/deploy/examples/basic-deploy-example.ts
+npx tsx src/smart-contracts/instantiate/examples/basic-instantiate-example.ts
+npx tsx src/smart-contracts/execute/examples/basic-execute-example.ts
 npx tsx src/smart-contracts/use-cases/dex/examples/dex-operations.ts
 npx tsx src/vote/examples/basic-vote-example.ts
 ```
