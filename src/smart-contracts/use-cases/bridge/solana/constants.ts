@@ -35,6 +35,11 @@ export const BPF_LOADER_UPGRADEABLE_ID = 'BPFLoaderUpgradeab1e111111111111111111
 export const TOKEN_PROGRAM_ID = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
 
 /**
+ * Token-2022 program ID
+ */
+export const TOKEN_2022_PROGRAM_ID = 'TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb';
+
+/**
  * SPL Associated Token Account program ID
  */
 export const ATA_PROGRAM_ID = 'ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL';
@@ -72,7 +77,23 @@ export const BridgeAction = {
   /** Mint wrapped token (existing token) */
   MINT_WRAPPED: 3,
   /** Register token */
-  REGISTER_TOKEN: 4
+  REGISTER_TOKEN: 4,
+  /** Release Token-2022 tokens */
+  RELEASE_2022: 5
 } as const;
 
 export type BridgeActionType = typeof BridgeAction[keyof typeof BridgeAction];
+
+/**
+ * User-facing Solana asset type selector.
+ */
+export const SolanaTokenType = {
+  /** Native SOL */
+  SOL: 'SOL',
+  /** Classic SPL token */
+  SPL: 'SPL',
+  /** Token-2022 token */
+  TOKEN2022: 'TOKEN2022'
+} as const;
+
+export type SolanaTokenTypeValue = typeof SolanaTokenType[keyof typeof SolanaTokenType];

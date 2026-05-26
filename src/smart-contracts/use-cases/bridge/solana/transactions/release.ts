@@ -7,6 +7,7 @@
 
 import {
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 import {
@@ -26,19 +27,22 @@ import {
   encodeU64BE,
   encodeU32LE
 } from '../../../../../shared/utils/byte-utils.js';
-import type { ReleaseSplOptions, ReleaseSolOptions } from '../types.js';
+import type { ReleaseToken2022Options, ReleaseSplOptions, ReleaseSolOptions } from '../types.js';
 import {
   CORE_PROGRAM_ID,
   TOKEN_BRIDGE_PROGRAM_ID,
   generateDiscriminator,
   deriveRouterSignerPDA,
+  deriveRouterSigner2022PDA,
   deriveRouterConfigPDA,
   deriveVerifiedTransferPDA,
   deriveReleasedTransferPDA,
   deriveVaultPDA,
   deriveRateLimitStatePDA,
   deriveTokenRegistrationPDA,
-  getATA
+  getATA,
+  getATAWithProgramId,
+  assertToken2022Mint
 } from '../utils.js';
 
 import {
@@ -47,6 +51,7 @@ import {
   DEFAULT_EVENT_INDEX,
   ACTION_RELEASE_SOL,
   ACTION_RELEASE_SPL,
+  ACTION_RELEASE_2022,
   createEd25519VerifyInstruction,
   parseSignatures
 } from './helpers.js';
@@ -280,6 +285,249 @@ export async function buildReleaseSplTransaction(
     }
   };
 }
+
+// ============================================================================
+// RELEASE TOKEN-2022 TOKENS
+// ============================================================================
+
+export interface ReleaseToken2022Result {
+  /** Core program verification instruction */
+  coreInstruction: TransactionInstruction;
+  /** Token bridge release_2022 instruction */
+  tokenInstruction: TransactionInstruction;
+  /** Ed25519 signature verification instructions */
+  signatureInstructions: TransactionInstruction[];
+  /** Combined transaction (backward compatibility) */
+  transaction: Transaction;
+  /** TX1: compute budget + ed25519 verify + core post_verified_transfer */
+  verifyTransaction: Transaction;
+  /** TX2: compute budget + release_2022 */
+  releaseTransaction: Transaction;
+  /** Accounts that will be created/modified */
+  accounts: {
+    recipientAta: PublicKey;
+    vaultAta: PublicKey;
+    routerSigner2022: PublicKey;
+    usedMarker: PublicKey;
+    redeemedMarker: PublicKey;
+  };
+}
+
+/**
+ * Build a complete Release Token-2022 transaction
+ *
+ * Releases locked Token-2022 tokens from the Token-2022 vault to the recipient.
+ * This follows the same verify-then-execute split as the SPL release path, but
+ * uses the Token-2022 program, Token-2022 ATAs, and the release_2022 action.
+ *
+ * Rust reference: stx_proxy_execute_release_2022
+ */
+export async function buildReleaseToken2022Transaction(
+  options: ReleaseToken2022Options,
+  payer: PublicKey,
+  connection?: Connection
+): Promise<ReleaseToken2022Result> {
+  const {
+    amount,
+    recipient,
+    mint,
+    txnId,
+    timestamp,
+    signatures,
+    expectedHash,
+    usdPriceNano,
+    liquidityUsdNano,
+    tier
+  } = options;
+
+  const version = DEFAULT_VAA_VERSION;
+  const expiry = DEFAULT_VAA_EXPIRY;
+  const eventIndex = DEFAULT_EVENT_INDEX;
+
+  const recipientPubkey = new PublicKey(recipient);
+  const mintPubkey = new PublicKey(mint);
+  await assertToken2022Mint(connection, mintPubkey);
+
+  const txnHash = hexToBytes(txnId).slice(0, 32);
+  const expectedHashBytes = hexToBytes(expectedHash);
+
+  // Derive PDAs
+  const [routerSigner2022] = deriveRouterSigner2022PDA();
+  const [routerCfg] = deriveRouterConfigPDA();
+  const [usedMarker] = deriveVerifiedTransferPDA(expectedHashBytes);
+  const [redeemedMarker] = deriveReleasedTransferPDA(expectedHashBytes);
+  const [rateLimitState] = deriveRateLimitStatePDA();
+  const [tokenRegistration] = deriveTokenRegistrationPDA(mintPubkey);
+
+  // Token-2022 ATAs
+  const recipientAta = getATAWithProgramId(recipientPubkey, mintPubkey, TOKEN_2022_PROGRAM_ID);
+  const vaultAta = getATAWithProgramId(routerSigner2022, mintPubkey, TOKEN_2022_PROGRAM_ID);
+
+  const amountBigInt = BigInt(amount);
+  const usdPriceNanoBigInt = BigInt(usdPriceNano);
+  const liquidityUsdNanoBigInt = BigInt(liquidityUsdNano);
+
+  const { sigs, pks } = parseSignatures(signatures);
+
+  const signatureInstructions: TransactionInstruction[] = [];
+  for (let i = 0; i < sigs.length; i++) {
+    const sig = sigs[i];
+    const pk = pks[i];
+    if (sig && pk) {
+      signatureInstructions.push(
+        createEd25519VerifyInstruction(expectedHashBytes, sig, pk)
+      );
+    }
+  }
+
+  const payload = concatBytes(
+    encodeU64BE(amountBigInt),
+    recipientPubkey.toBytes(),
+    mintPubkey.toBytes(),
+    encodeU64BE(usdPriceNanoBigInt),
+    encodeU64BE(liquidityUsdNanoBigInt),
+    new Uint8Array([tier])
+  );
+
+  const coreData = concatBytes(
+    generateDiscriminator('global:post_verified_transfer'),
+    new Uint8Array([version]),
+    new Uint8Array([ACTION_RELEASE_2022]),
+    encodeU64LE(BigInt(timestamp)),
+    encodeU64LE(BigInt(expiry)),
+    txnHash,
+    encodeU32LE(eventIndex),
+    encodeU32LE(payload.length),
+    payload,
+    new Uint8Array([(payload.length >> 0) & 0xff, (payload.length >> 8) & 0xff])
+  );
+
+  const coreInstruction = new TransactionInstruction({
+    programId: CORE_PROGRAM_ID,
+    keys: [
+      { pubkey: routerCfg, isSigner: false, isWritable: true },
+      { pubkey: SYSVAR_INSTRUCTIONS_PUBKEY, isSigner: false, isWritable: false },
+      { pubkey: usedMarker, isSigner: false, isWritable: true },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_BRIDGE_PROGRAM_ID, isSigner: false, isWritable: false }
+    ],
+    data: Buffer.from(coreData)
+  });
+
+  const tokenData = concatBytes(
+    generateDiscriminator('global:release_2022'),
+    new Uint8Array([version]),
+    encodeU64LE(BigInt(timestamp)),
+    encodeU64LE(BigInt(expiry)),
+    txnHash,
+    encodeU32LE(eventIndex),
+    encodeU64LE(amountBigInt),
+    encodeU64LE(usdPriceNanoBigInt),
+    encodeU64LE(liquidityUsdNanoBigInt),
+    new Uint8Array([tier])
+  );
+
+  // Account order must match Rust reference exactly:
+  // 1.  core_program (readonly)
+  // 2.  router_cfg (readonly)
+  // 3.  payer (signer, writable)
+  // 4.  mint (readonly)
+  // 5.  router_signer_2022 (readonly)
+  // 6.  vault_ata (writable)
+  // 7.  recipient (readonly)
+  // 8.  recipient_ata (writable)
+  // 9.  associated_token_program (readonly)
+  // 10. used_marker (readonly)
+  // 11. redeemed_marker (writable)
+  // 12. rate_limit_state (writable)
+  // 13. token_registration (writable)
+  // 14. token_program (Token-2022, readonly)
+  // 15. system_program (readonly)
+  // 16. target_program (readonly)
+  const tokenInstruction = new TransactionInstruction({
+    programId: TOKEN_BRIDGE_PROGRAM_ID,
+    keys: [
+      { pubkey: CORE_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: routerCfg, isSigner: false, isWritable: false },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: mintPubkey, isSigner: false, isWritable: false },
+      { pubkey: routerSigner2022, isSigner: false, isWritable: false },
+      { pubkey: vaultAta, isSigner: false, isWritable: true },
+      { pubkey: recipientPubkey, isSigner: false, isWritable: false },
+      { pubkey: recipientAta, isSigner: false, isWritable: true },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: usedMarker, isSigner: false, isWritable: false },
+      { pubkey: redeemedMarker, isSigner: false, isWritable: true },
+      { pubkey: rateLimitState, isSigner: false, isWritable: true },
+      { pubkey: tokenRegistration, isSigner: false, isWritable: true },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_BRIDGE_PROGRAM_ID, isSigner: false, isWritable: false }
+    ],
+    data: Buffer.from(tokenData)
+  });
+
+  const verifyTransaction = new Transaction();
+  if (signatureInstructions.length > 0) {
+    verifyTransaction.add(
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })
+    );
+  }
+  for (const ix of signatureInstructions) {
+    verifyTransaction.add(ix);
+  }
+  verifyTransaction.add(coreInstruction);
+  verifyTransaction.feePayer = payer;
+
+  const releaseTransaction = new Transaction();
+  releaseTransaction.add(
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
+    tokenInstruction
+  );
+  releaseTransaction.feePayer = payer;
+
+  const transaction = new Transaction();
+  if (signatureInstructions.length > 0) {
+    transaction.add(
+      ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 })
+    );
+  }
+  for (const ix of signatureInstructions) {
+    transaction.add(ix);
+  }
+  transaction.add(coreInstruction, tokenInstruction);
+  transaction.feePayer = payer;
+
+  if (connection) {
+    const { blockhash } = await connection.getLatestBlockhash();
+    verifyTransaction.recentBlockhash = blockhash;
+    releaseTransaction.recentBlockhash = blockhash;
+    transaction.recentBlockhash = blockhash;
+  }
+
+  return {
+    coreInstruction,
+    tokenInstruction,
+    signatureInstructions,
+    transaction,
+    verifyTransaction,
+    releaseTransaction,
+    accounts: {
+      recipientAta,
+      vaultAta,
+      routerSigner2022,
+      usedMarker,
+      redeemedMarker
+    }
+  };
+}
+
+/** @deprecated Use ReleaseToken2022Result. */
+export type Release2022Result = ReleaseToken2022Result;
+
+/** @deprecated Use buildReleaseToken2022Transaction. */
+export const buildRelease2022Transaction = buildReleaseToken2022Transaction;
 
 // ============================================================================
 // RELEASE SOL (NATIVE)

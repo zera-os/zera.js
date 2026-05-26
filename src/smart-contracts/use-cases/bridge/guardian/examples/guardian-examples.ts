@@ -51,8 +51,8 @@ const connection = new Connection(SOLANA_RPC_URL);
 /** ZERA network configuration (mainnet) */
 const ZERA_CONFIG = MAINNET_GRPC_CONFIG;
 
-/** Fee amount in USD for bridge transactions */
-const FEE_AMOUNT_USD = '5.00'; // $5.00 USD
+/** Adds $5 smart-contract gas; the SDK calculates the base fee in token parts. */
+const GAS_FEE_IN_USD = 5;
 
 /** Fee contract ID (defaults to ZRA) */
 const FEE_CONTRACT_ID = '$ZRA+0000';
@@ -204,7 +204,7 @@ async function submitToZeraExample(solanaTxnSignature?: string) {
       zeraConfig: ZERA_CONFIG,
       publicKeyBase58: ED25519_TEST_KEYS.alice.publicKey,
       privateKeyBase58: ED25519_TEST_KEYS.alice.privateKey,
-      feeAmountUsd: FEE_AMOUNT_USD,
+      gasFeeInUsd: GAS_FEE_IN_USD,
       feeId: FEE_CONTRACT_ID
     });
     

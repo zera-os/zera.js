@@ -16,7 +16,7 @@
  * });
  * 
  * // Get a VAA payload
- * const response = await client.getPayload(new guardian.PayloadRequest({
+ * const response = await client.getPayload(create(guardian.PayloadRequestSchema, {
  *   payloadId: 'txn_hash',
  *   networkType: guardian.NETWORK_TYPE.ZERA
  * }));
@@ -105,5 +105,7 @@ export type {
 
 export {
   // Enums
-  NETWORK_TYPE
+  NETWORK_TYPE,
+  PayloadRequestSchema,
+  SearchPayloadRequestSchema
 } from '../../../../../proto/generated/guardian_pb.js';

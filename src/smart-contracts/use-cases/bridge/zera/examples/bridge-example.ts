@@ -36,8 +36,8 @@ import {
 /** ZERA network configuration (mainnet) */
 const ZERA_CONFIG = MAINNET_GRPC_CONFIG;
 
-/** Fee amount in USD for bridge transactions */
-const FEE_AMOUNT_USD = '2.00'; // $5.00 USD
+/** Adds $5 smart-contract gas; the SDK calculates the base fee in token parts. */
+const GAS_FEE_IN_USD = 5;
 
 /** Fee contract ID (defaults to ZRA) */
 const FEE_CONTRACT_ID = '$ZRA+0000';
@@ -83,7 +83,7 @@ async function lockZeraExample() {
       {
         grpcConfig: ZERA_CONFIG,
         feeId: FEE_CONTRACT_ID,
-        feeAmountUsd: FEE_AMOUNT_USD
+        gasFeeInUsd: GAS_FEE_IN_USD
       }
     );
 
@@ -124,7 +124,7 @@ async function lockZeraAndSendExample() {
       {
         grpcConfig: ZERA_CONFIG,
         feeId: FEE_CONTRACT_ID,
-        feeAmountUsd: FEE_AMOUNT_USD
+        gasFeeInUsd: GAS_FEE_IN_USD
       }
     );
 
@@ -169,7 +169,7 @@ async function burnSolExample() {
       {
         grpcConfig: ZERA_CONFIG,
         feeId: FEE_CONTRACT_ID,
-        feeAmountUsd: FEE_AMOUNT_USD
+        gasFeeInUsd: GAS_FEE_IN_USD
       }
     );
 
@@ -223,7 +223,7 @@ async function burnSolAndSendExample() {
       {
         grpcConfig: ZERA_CONFIG,
         feeId: FEE_CONTRACT_ID,
-        feeAmountUsd: FEE_AMOUNT_USD
+        gasFeeInUsd: GAS_FEE_IN_USD
       }
     );
 
@@ -285,7 +285,7 @@ export {
   ZERA_PUBLIC_KEY,
   ZERA_PRIVATE_KEY,
   SOLANA_DESTINATION,
-  FEE_AMOUNT_USD,
+  GAS_FEE_IN_USD,
 
   // Utilities
   hashToHex

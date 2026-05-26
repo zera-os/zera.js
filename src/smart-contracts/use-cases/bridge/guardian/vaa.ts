@@ -17,7 +17,7 @@
  */
 
 import { create } from '@bufbuild/protobuf';
-import { Connection, Keypair, sendAndConfirmTransaction } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, sendAndConfirmTransaction } from '@solana/web3.js';
 
 import { GuardianService } from '../../../../../proto/generated/guardian_pb.js';
 import {
@@ -29,12 +29,18 @@ import {
 import { createClient } from '../../../../grpc/client-factory.js';
 import type { GRPCConfig } from '../../../../types/index.js';
 import {
+  buildReleaseToken2022Transaction,
   buildReleaseSplTransaction,
   buildReleaseSolTransaction,
   buildMintWrappedTransaction,
   buildMintWrappedExistingTransaction
 } from '../solana/transactions/index.js';
 import type { GuardianSignature } from '../solana/types.js';
+import {
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  getMintAccountOwner
+} from '../solana/utils.js';
 
 // ============================================================================
 // TYPES
@@ -61,7 +67,7 @@ export interface SubmitVAAToSolanaResult {
   /** Solana transaction signature */
   signature: string;
   /** Type of operation performed */
-  operationType: 'release_spl' | 'release_sol' | 'mint_wrapped';
+  operationType: 'release_spl' | 'release_sol' | 'release_2022' | 'mint_wrapped';
   /** The VAA payload that was submitted */
   payload: SolanaPayload;
 }
@@ -77,13 +83,18 @@ export interface SubmitVAAToZeraOptions {
   publicKeyBase58: string;
   /** ZERA signer private key (base58) */
   privateKeyBase58: string;
-  /** Optional fee amount in USD (skips auto-calculation if provided) */
+  /** Optional manual fee amount in raw token parts (overrides auto-calculation) */
+  feeAmountParts?: string;
+  /**
+   * @deprecated Use feeAmountParts for raw token parts, or gasFeeInUsd
+   * to add USD-denominated smart-contract gas on top of the calculated fee.
+   */
   feeAmountUsd?: string;
   /** Optional gas fee in USD for smart contract execution */
   gasFeeInUsd?: number;
   /** Optional fee contract ID (defaults to the bridged token if not specified) */
   feeId?: string;
-  /** Optional fee amount in raw parts (overrides auto-calculation) */
+  /** Optional manual fee amount in raw parts (deprecated alias for feeAmountParts) */
   feeAmount?: string;
   /** Optional: Retry VAA fetch with exponential backoff */
   retryOptions?: VAARetryOptions;
@@ -359,7 +370,7 @@ export async function submitVAAToSolana(
   
   // 3. Build and send appropriate transaction based on payload type
   let signature: string;
-  let operationType: 'release_spl' | 'release_sol' | 'mint_wrapped';
+  let operationType: 'release_spl' | 'release_sol' | 'release_2022' | 'mint_wrapped';
   
   switch (solanaPayload.payload.case) {
   case 'releasePayload': {
@@ -405,42 +416,88 @@ export async function submitVAAToSolana(
       }
       operationType = 'release_sol';
     } else {
-      // SPL token release — two-transaction split (matches SOL/mint patterns)
-      const { verifyTransaction, releaseTransaction } = await buildReleaseSplTransaction(
-        {
-          amount: BigInt(release.amount.toString()),
-          recipient: release.solanaWalletAddress,
-          mint: release.solanaMintAddress,
-          txnId: release.txnHash,
-          timestamp,
-          signatures,
-          expectedHash: solanaPayload.signedHash,
-          usdPriceNano: BigInt(release.usdAmount.toString()),
-          liquidityUsdNano: BigInt(release.liquidityUsd.toString()),
-          tier: release.tier
-        },
-        payer.publicKey,
-        connection
-      );
-
-      // TX1: Ed25519 signature verification + core post_verified_transfer
-      verifyTransaction.sign(payer);
-      if (skipConfirmation) {
-        await connection.sendRawTransaction(verifyTransaction.serialize(), { skipPreflight });
-      } else {
-        await sendAndConfirmTransaction(connection, verifyTransaction, [payer], { skipPreflight });
+      const mintOwner = await getMintAccountOwner(connection, new PublicKey(release.solanaMintAddress));
+      if (!mintOwner.equals(TOKEN_PROGRAM_ID) && !mintOwner.equals(TOKEN_2022_PROGRAM_ID)) {
+        throw new Error(
+          `Mint ${release.solanaMintAddress} is owned by unsupported token program ${mintOwner.toBase58()}`
+        );
       }
+      const isToken2022 = mintOwner.equals(TOKEN_2022_PROGRAM_ID);
 
-      // TX2: Token bridge release_spl (needs fresh blockhash)
-      const { blockhash } = await connection.getLatestBlockhash();
-      releaseTransaction.recentBlockhash = blockhash;
-      releaseTransaction.sign(payer);
-      if (skipConfirmation) {
-        signature = await connection.sendRawTransaction(releaseTransaction.serialize(), { skipPreflight });
+      if (isToken2022) {
+        const { verifyTransaction, releaseTransaction } = await buildReleaseToken2022Transaction(
+          {
+            amount: BigInt(release.amount.toString()),
+            recipient: release.solanaWalletAddress,
+            mint: release.solanaMintAddress,
+            txnId: release.txnHash,
+            timestamp,
+            signatures,
+            expectedHash: solanaPayload.signedHash,
+            usdPriceNano: BigInt(release.usdAmount.toString()),
+            liquidityUsdNano: BigInt(release.liquidityUsd.toString()),
+            tier: release.tier
+          },
+          payer.publicKey,
+          connection
+        );
+
+        // TX1: Ed25519 signature verification + core post_verified_transfer
+        verifyTransaction.sign(payer);
+        if (skipConfirmation) {
+          await connection.sendRawTransaction(verifyTransaction.serialize(), { skipPreflight });
+        } else {
+          await sendAndConfirmTransaction(connection, verifyTransaction, [payer], { skipPreflight });
+        }
+
+        // TX2: Token bridge release_2022 (needs fresh blockhash)
+        const { blockhash } = await connection.getLatestBlockhash();
+        releaseTransaction.recentBlockhash = blockhash;
+        releaseTransaction.sign(payer);
+        if (skipConfirmation) {
+          signature = await connection.sendRawTransaction(releaseTransaction.serialize(), { skipPreflight });
+        } else {
+          signature = await sendAndConfirmTransaction(connection, releaseTransaction, [payer], { skipPreflight });
+        }
+        operationType = 'release_2022';
       } else {
-        signature = await sendAndConfirmTransaction(connection, releaseTransaction, [payer], { skipPreflight });
+        // SPL token release — two-transaction split (matches SOL/mint patterns)
+        const { verifyTransaction, releaseTransaction } = await buildReleaseSplTransaction(
+          {
+            amount: BigInt(release.amount.toString()),
+            recipient: release.solanaWalletAddress,
+            mint: release.solanaMintAddress,
+            txnId: release.txnHash,
+            timestamp,
+            signatures,
+            expectedHash: solanaPayload.signedHash,
+            usdPriceNano: BigInt(release.usdAmount.toString()),
+            liquidityUsdNano: BigInt(release.liquidityUsd.toString()),
+            tier: release.tier
+          },
+          payer.publicKey,
+          connection
+        );
+
+        // TX1: Ed25519 signature verification + core post_verified_transfer
+        verifyTransaction.sign(payer);
+        if (skipConfirmation) {
+          await connection.sendRawTransaction(verifyTransaction.serialize(), { skipPreflight });
+        } else {
+          await sendAndConfirmTransaction(connection, verifyTransaction, [payer], { skipPreflight });
+        }
+
+        // TX2: Token bridge release_spl (needs fresh blockhash)
+        const { blockhash } = await connection.getLatestBlockhash();
+        releaseTransaction.recentBlockhash = blockhash;
+        releaseTransaction.sign(payer);
+        if (skipConfirmation) {
+          signature = await connection.sendRawTransaction(releaseTransaction.serialize(), { skipPreflight });
+        } else {
+          signature = await sendAndConfirmTransaction(connection, releaseTransaction, [payer], { skipPreflight });
+        }
+        operationType = 'release_spl';
       }
-      operationType = 'release_spl';
     }
     break;
   }
@@ -575,6 +632,7 @@ export async function submitVAAToZera(
   options: SubmitVAAToZeraOptions
 ): Promise<SubmitVAAToZeraResult> {
   const { txSignature, guardianConfig, zeraConfig, publicKeyBase58, privateKeyBase58, retryOptions } = options;
+  const feeAmountParts = options.feeAmountParts ?? options.feeAmount ?? options.feeAmountUsd;
   
   // Import ZERA functions dynamically to avoid circular dependencies
   const { releaseZeraAndSend, mintSolAndSend, createSolAndSend } = await import('../zera/transactions/index.js');
@@ -597,10 +655,9 @@ export async function submitVAAToZera(
       {
         payload: zeraPayload,
         grpcConfig: zeraConfig,
-        ...(options.feeAmountUsd !== undefined && { feeAmountUsd: options.feeAmountUsd }),
+        ...(feeAmountParts !== undefined && { feeAmountParts }),
         ...(options.gasFeeInUsd !== undefined && { gasFeeInUsd: options.gasFeeInUsd }),
-        ...(options.feeId !== undefined && { feeId: options.feeId }),
-        ...(options.feeAmount !== undefined && { feeAmountUsd: options.feeAmount })
+        ...(options.feeId !== undefined && { feeId: options.feeId })
       }
     );
     operationType = 'release';
@@ -617,10 +674,9 @@ export async function submitVAAToZera(
       {
         payload: zeraPayload,
         grpcConfig: zeraConfig,
-        ...(options.feeAmountUsd !== undefined && { feeAmountUsd: options.feeAmountUsd }),
+        ...(feeAmountParts !== undefined && { feeAmountParts }),
         ...(options.gasFeeInUsd !== undefined && { gasFeeInUsd: options.gasFeeInUsd }),
-        ...(options.feeId !== undefined && { feeId: options.feeId }),
-        ...(options.feeAmount !== undefined && { feeAmountUsd: options.feeAmount })
+        ...(options.feeId !== undefined && { feeId: options.feeId })
       }
     );
     operationType = 'mint';
@@ -637,10 +693,9 @@ export async function submitVAAToZera(
       {
         payload: zeraPayload,
         grpcConfig: zeraConfig,
-        ...(options.feeAmountUsd !== undefined && { feeAmountUsd: options.feeAmountUsd }),
+        ...(feeAmountParts !== undefined && { feeAmountParts }),
         ...(options.gasFeeInUsd !== undefined && { gasFeeInUsd: options.gasFeeInUsd }),
-        ...(options.feeId !== undefined && { feeId: options.feeId }),
-        ...(options.feeAmount !== undefined && { feeAmountUsd: options.feeAmount })
+        ...(options.feeId !== undefined && { feeId: options.feeId })
       }
     );
     operationType = 'mint';
@@ -657,4 +712,3 @@ export async function submitVAAToZera(
     payload: zeraPayload
   };
 }
-

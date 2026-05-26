@@ -8,10 +8,12 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import {
   TOKEN_PROGRAM_ID as SPL_TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID as SPL_TOKEN_2022_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID,
   getAssociatedTokenAddressSync
 } from '@solana/spl-token';
 import {
+  type Connection,
   PublicKey,
   SystemProgram,
   SYSVAR_INSTRUCTIONS_PUBKEY
@@ -56,6 +58,7 @@ export const BPF_LOADER_UPGRADEABLE_ID = new PublicKey('BPFLoaderUpgradeab1e1111
 // Re-export standard Solana program IDs
 export { SystemProgram, SYSVAR_INSTRUCTIONS_PUBKEY };
 export const TOKEN_PROGRAM_ID = SPL_TOKEN_PROGRAM_ID;
+export const TOKEN_2022_PROGRAM_ID = SPL_TOKEN_2022_PROGRAM_ID;
 export const ATA_PROGRAM_ID = ASSOCIATED_TOKEN_PROGRAM_ID;
 
 // ============================================================================
@@ -84,6 +87,16 @@ export function generateDiscriminator(name: string): Uint8Array {
 export function deriveRouterSignerPDA(): [PublicKey, number] {
   return PublicKey.findProgramAddressSync(
     [Buffer.from('router_signer')],
+    TOKEN_BRIDGE_PROGRAM_ID
+  );
+}
+
+/**
+ * Derive Token-2022 router signer PDA
+ */
+export function deriveRouterSigner2022PDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('router_signer_2022')],
     TOKEN_BRIDGE_PROGRAM_ID
   );
 }
@@ -149,6 +162,16 @@ export function deriveTokenRegistrationPDA(mint: PublicKey): [PublicKey, number]
 }
 
 /**
+ * Derive Token-2022 extension whitelist PDA
+ */
+export function deriveExtensionWhitelist2022PDA(): [PublicKey, number] {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from('extension_whitelist_2022')],
+    TOKEN_BRIDGE_PROGRAM_ID
+  );
+}
+
+/**
  * Derive wrapped mint PDA from ZERA contract ID
  * 
  * Rust reference: Pubkey::find_program_address(&[b"mint", &contract_id_hash], &*TOKEN_BRIDGE_PROGRAM_ID)
@@ -207,6 +230,58 @@ export function deriveMetadataPDA(mint: PublicKey): [PublicKey, number] {
  */
 export function getATA(owner: PublicKey, mint: PublicKey): PublicKey {
   return getAssociatedTokenAddressSync(mint, owner, true);
+}
+
+/**
+ * Get Associated Token Address for a specific token program.
+ *
+ * Token-2022 ATAs use the same associated token program, but the token
+ * program ID is part of the derivation.
+ */
+export function getATAWithProgramId(
+  owner: PublicKey,
+  mint: PublicKey,
+  tokenProgramId: PublicKey
+): PublicKey {
+  return getAssociatedTokenAddressSync(mint, owner, true, tokenProgramId);
+}
+
+// ============================================================================
+// TOKEN PROGRAM OWNER HELPERS
+// ============================================================================
+
+/**
+ * Fetch the owner program for a mint account.
+ */
+export async function getMintAccountOwner(
+  connection: Connection,
+  mint: PublicKey
+): Promise<PublicKey> {
+  const mintAccount = await connection.getAccountInfo(mint);
+  if (!mintAccount) {
+    throw new Error(`Mint account not found: ${mint.toBase58()}`);
+  }
+
+  return mintAccount.owner;
+}
+
+/**
+ * Assert that a mint is owned by the Token-2022 program when a connection is supplied.
+ */
+export async function assertToken2022Mint(
+  connection: Connection | undefined,
+  mint: PublicKey
+): Promise<void> {
+  if (!connection) {
+    return;
+  }
+
+  const owner = await getMintAccountOwner(connection, mint);
+  if (!owner.equals(TOKEN_2022_PROGRAM_ID)) {
+    throw new Error(
+      `Mint ${mint.toBase58()} is owned by ${owner.toBase58()}, expected ${TOKEN_2022_PROGRAM_ID.toBase58()}`
+    );
+  }
 }
 
 // ============================================================================

@@ -25,10 +25,14 @@ import type { RequestTokenRegistrationOptions, RegisterTokenOptions } from '../t
 import {
   CORE_PROGRAM_ID,
   TOKEN_BRIDGE_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   generateDiscriminator,
   deriveRouterConfigPDA,
   deriveVerifiedTransferPDA,
-  deriveTokenRegistrationPDA
+  deriveTokenRegistrationPDA,
+  deriveExtensionWhitelist2022PDA,
+  getMintAccountOwner
 } from '../utils.js';
 
 import {
@@ -49,7 +53,37 @@ export interface RequestTokenRegistrationResult {
   accounts: {
     pendingRegistration: PublicKey;
     mint: PublicKey;
+    tokenProgramId: PublicKey;
+    extensionWhitelist: PublicKey | undefined;
   };
+}
+
+async function resolveMintTokenProgramId(
+  mint: PublicKey,
+  connection?: Connection,
+  tokenProgramId?: string
+): Promise<PublicKey> {
+  if (tokenProgramId) {
+    const owner = new PublicKey(tokenProgramId);
+    if (owner.equals(TOKEN_PROGRAM_ID) || owner.equals(TOKEN_2022_PROGRAM_ID)) {
+      return owner;
+    }
+
+    throw new Error(`Unsupported token program override: ${owner.toBase58()}`);
+  }
+
+  if (!connection) {
+    return TOKEN_PROGRAM_ID;
+  }
+
+  const owner = await getMintAccountOwner(connection, mint);
+  if (owner.equals(TOKEN_PROGRAM_ID) || owner.equals(TOKEN_2022_PROGRAM_ID)) {
+    return owner;
+  }
+
+  throw new Error(
+    `Mint ${mint.toBase58()} is owned by unsupported token program ${owner.toBase58()}`
+  );
 }
 
 /**
@@ -57,15 +91,25 @@ export interface RequestTokenRegistrationResult {
  * 
  * Permissionless request for token registration.
  * Anyone can request registration; guardians must approve via register_token.
+ *
+ * Rust reference: stx_proxy_execute_request_token_registration
  */
 export async function buildRequestTokenRegistrationTransaction(
   options: RequestTokenRegistrationOptions,
   payer: PublicKey,
   connection?: Connection
 ): Promise<RequestTokenRegistrationResult> {
-  const { mint } = options;
+  const { mint, tokenProgramId: tokenProgramIdOverride } = options;
 
   const mintPubkey = new PublicKey(mint);
+  const tokenProgramId = await resolveMintTokenProgramId(
+    mintPubkey,
+    connection,
+    tokenProgramIdOverride
+  );
+  const [extensionWhitelist] = tokenProgramId.equals(TOKEN_2022_PROGRAM_ID)
+    ? deriveExtensionWhitelist2022PDA()
+    : [undefined];
 
   // Derive pending_registration PDA
   const [pendingRegistration] = PublicKey.findProgramAddressSync(
@@ -74,15 +118,20 @@ export async function buildRequestTokenRegistrationTransaction(
   );
 
   const data = generateDiscriminator('global:request_token_registration');
+  const keys = [
+    { pubkey: payer, isSigner: true, isWritable: true },
+    { pubkey: mintPubkey, isSigner: false, isWritable: false },
+    { pubkey: pendingRegistration, isSigner: false, isWritable: true },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+  ];
+
+  if (extensionWhitelist) {
+    keys.push({ pubkey: extensionWhitelist, isSigner: false, isWritable: false });
+  }
 
   const instruction = new TransactionInstruction({
     programId: TOKEN_BRIDGE_PROGRAM_ID,
-    keys: [
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: mintPubkey, isSigner: false, isWritable: false },
-      { pubkey: pendingRegistration, isSigner: false, isWritable: true },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-    ],
+    keys,
     data: Buffer.from(data)
   });
 
@@ -97,7 +146,7 @@ export async function buildRequestTokenRegistrationTransaction(
   return {
     instruction,
     transaction,
-    accounts: { pendingRegistration, mint: mintPubkey }
+    accounts: { pendingRegistration, mint: mintPubkey, tokenProgramId, extensionWhitelist }
   };
 }
 
@@ -119,6 +168,8 @@ export interface RegisterTokenResult {
     tokenRegistration: PublicKey;
     mint: PublicKey;
     usedMarker: PublicKey;
+    tokenProgramId: PublicKey;
+    extensionWhitelist: PublicKey | undefined;
   };
 }
 
@@ -127,6 +178,8 @@ export interface RegisterTokenResult {
  * 
  * Guardian-attested token registration.
  * Completes the registration requested by request_token_registration.
+ *
+ * Rust reference: stx_proxy_execute_register_token
  */
 export async function buildRegisterTokenTransaction(
   options: RegisterTokenOptions,
@@ -141,7 +194,8 @@ export async function buildRegisterTokenTransaction(
     expectedHash,
     usdPriceNano,
     liquidityUsdNano,
-    tier
+    tier,
+    tokenProgramId: tokenProgramIdOverride
   } = options;
 
   const version = DEFAULT_VAA_VERSION;
@@ -149,6 +203,14 @@ export async function buildRegisterTokenTransaction(
   const eventIndex = DEFAULT_EVENT_INDEX;
 
   const mintPubkey = new PublicKey(mint);
+  const tokenProgramId = await resolveMintTokenProgramId(
+    mintPubkey,
+    connection,
+    tokenProgramIdOverride
+  );
+  const [extensionWhitelist] = tokenProgramId.equals(TOKEN_2022_PROGRAM_ID)
+    ? deriveExtensionWhitelist2022PDA()
+    : [undefined];
   const txnHashRaw = hexToBytes(txnId);
   const txnHash = txnHashRaw.slice(0, 32); // Truncate to 32 bytes to match ZERA hash size
   const expectedHashBytes = hexToBytes(expectedHash);
@@ -225,17 +287,23 @@ export async function buildRegisterTokenTransaction(
     new Uint8Array([tier])
   );
 
+  const tokenKeys = [
+    { pubkey: CORE_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: payer, isSigner: true, isWritable: true },
+    { pubkey: mintPubkey, isSigner: false, isWritable: false },
+    { pubkey: tokenRegistration, isSigner: false, isWritable: true },
+    { pubkey: usedMarker, isSigner: false, isWritable: false },
+    { pubkey: TOKEN_BRIDGE_PROGRAM_ID, isSigner: false, isWritable: false },
+    { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+  ];
+
+  if (extensionWhitelist) {
+    tokenKeys.push({ pubkey: extensionWhitelist, isSigner: false, isWritable: false });
+  }
+
   const tokenInstruction = new TransactionInstruction({
     programId: TOKEN_BRIDGE_PROGRAM_ID,
-    keys: [
-      { pubkey: CORE_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: payer, isSigner: true, isWritable: true },
-      { pubkey: mintPubkey, isSigner: false, isWritable: false },
-      { pubkey: tokenRegistration, isSigner: false, isWritable: true },
-      { pubkey: usedMarker, isSigner: false, isWritable: false },
-      { pubkey: TOKEN_BRIDGE_PROGRAM_ID, isSigner: false, isWritable: false },
-      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
-    ],
+    keys: tokenKeys,
     data: Buffer.from(tokenData)
   });
 
@@ -288,7 +356,6 @@ export async function buildRegisterTokenTransaction(
     transaction,
     verifyTransaction,
     registerTransaction,
-    accounts: { tokenRegistration, mint: mintPubkey, usedMarker }
+    accounts: { tokenRegistration, mint: mintPubkey, usedMarker, tokenProgramId, extensionWhitelist }
   };
 }
-

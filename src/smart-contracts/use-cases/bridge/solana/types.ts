@@ -32,6 +32,8 @@ export interface GuardianSignature {
   publicKey: string;
 }
 
+export type { SolanaTokenTypeValue as SolanaTokenType } from './constants.js';
+
 /**
  * Options for releasing SPL tokens on Solana
  */
@@ -41,6 +43,32 @@ export interface ReleaseSplOptions extends SolanaBridgeOptions {
   /** Recipient Solana address */
   recipient: string;
   /** SPL token mint address */
+  mint: string;
+  /** Transaction ID (hex encoded, 32 bytes) */
+  txnId: string;
+  /** Timestamp of the original ZERA transaction */
+  timestamp: number;
+  /** Guardian signatures for VAA verification */
+  signatures: GuardianSignature[];
+  /** Expected hash of the VAA (hex encoded) */
+  expectedHash: string;
+  /** USD price in nano units (for rate limiting) */
+  usdPriceNano: bigint | string;
+  /** Liquidity in USD nano units (for rate limiting) */
+  liquidityUsdNano: bigint | string;
+  /** Tier level for rate limiting (0-255) */
+  tier: number;
+}
+
+/**
+ * Options for releasing Token-2022 tokens on Solana
+ */
+export interface ReleaseToken2022Options extends SolanaBridgeOptions {
+  /** Amount in smallest units */
+  amount: bigint | string;
+  /** Recipient Solana address */
+  recipient: string;
+  /** Token-2022 mint address */
   mint: string;
   /** Transaction ID (hex encoded, 32 bytes) */
   txnId: string;
@@ -91,6 +119,24 @@ export interface LockSplOptions extends SolanaBridgeOptions {
 }
 
 /**
+ * Options for locking Token-2022 tokens to bridge to ZERA
+ */
+export interface LockToken2022Options extends SolanaBridgeOptions {
+  /** Amount in smallest units */
+  amount: bigint | string;
+  /** ZERA address to receive the bridged tokens */
+  zeraAddress: string;
+  /** Token-2022 mint address */
+  mint: string;
+}
+
+/** @deprecated Use ReleaseToken2022Options. */
+export type Release2022Options = ReleaseToken2022Options;
+
+/** @deprecated Use LockToken2022Options. */
+export type Lock2022Options = LockToken2022Options;
+
+/**
  * Options for locking native SOL to bridge to ZERA
  */
 export interface LockSolOptions extends SolanaBridgeOptions {
@@ -99,6 +145,28 @@ export interface LockSolOptions extends SolanaBridgeOptions {
   /** ZERA address to receive the bridged tokens */
   zeraAddress: string;
 }
+
+/**
+ * Token-type routed lock options.
+ *
+ * Use this when the caller wants one Solana-side lock entrypoint and chooses
+ * the asset path explicitly with tokenType.
+ */
+export type LockSolanaOptions =
+  | (LockSolOptions & { tokenType: 'SOL' })
+  | (LockSplOptions & { tokenType: 'SPL' })
+  | (LockToken2022Options & { tokenType: 'TOKEN2022' });
+
+/**
+ * Token-type routed release options.
+ *
+ * Use this when the caller wants one Solana-side release entrypoint and chooses
+ * the asset path explicitly with tokenType.
+ */
+export type ReleaseSolanaOptions =
+  | (ReleaseSolOptions & { tokenType: 'SOL' })
+  | (ReleaseSplOptions & { tokenType: 'SPL' })
+  | (ReleaseToken2022Options & { tokenType: 'TOKEN2022' });
 
 /**
  * Options for minting wrapped tokens (new token initialization)
@@ -176,15 +244,23 @@ export interface BurnWrappedOptions extends SolanaBridgeOptions {
  * Options for requesting token registration (permissionless)
  */
 export interface RequestTokenRegistrationOptions extends SolanaBridgeOptions {
-  /** SPL token mint address to register */
+  /** SPL or Token-2022 token mint address to register */
   mint: string;
+  /**
+   * Token program that owns the mint.
+   * Defaults to the classic SPL token program when no Connection is supplied.
+   * With a Connection, builders detect the mint owner and fail if the mint is
+   * missing or owned by an unsupported program. Pass TOKEN_2022_PROGRAM_ID to
+   * force Token-2022 without an RPC mint-owner lookup.
+   */
+  tokenProgramId?: string;
 }
 
 /**
  * Options for completing token registration (guardian-attested)
  */
 export interface RegisterTokenOptions extends SolanaBridgeOptions {
-  /** SPL token mint address to register */
+  /** SPL or Token-2022 token mint address to register */
   mint: string;
   /** Transaction ID (hex encoded, 32 bytes) */
   txnId: string;
@@ -200,6 +276,14 @@ export interface RegisterTokenOptions extends SolanaBridgeOptions {
   liquidityUsdNano: bigint | string;
   /** Tier level (0-255) */
   tier: number;
+  /**
+   * Token program that owns the mint.
+   * Defaults to the classic SPL token program when no Connection is supplied.
+   * With a Connection, builders detect the mint owner and fail if the mint is
+   * missing or owned by an unsupported program. Pass TOKEN_2022_PROGRAM_ID to
+   * force Token-2022 without an RPC mint-owner lookup.
+   */
+  tokenProgramId?: string;
 }
 
 /**

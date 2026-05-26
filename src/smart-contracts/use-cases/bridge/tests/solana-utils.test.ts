@@ -4,7 +4,7 @@
  * Tests for the utility functions used in building Solana bridge transactions.
  */
 
-import { PublicKey } from '@solana/web3.js';
+import { Keypair, PublicKey } from '@solana/web3.js';
 import { describe, it, expect } from 'vitest';
 
 import {
@@ -21,16 +21,20 @@ import {
   concatBytes,
   hashContractId,
   deriveRouterSignerPDA,
+  deriveRouterSigner2022PDA,
   deriveRouterConfigPDA,
   deriveVaultPDA,
   deriveVerifiedTransferPDA,
   deriveReleasedTransferPDA,
   deriveRateLimitStatePDA,
   deriveTokenRegistrationPDA,
+  deriveExtensionWhitelist2022PDA,
   deriveWrappedMintPDA,
   deriveWrappedMintAuthorityPDA,
+  getATAWithProgramId,
   CORE_PROGRAM_ID,
-  TOKEN_BRIDGE_PROGRAM_ID
+  TOKEN_BRIDGE_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID
 } from '../solana/utils.js';
 
 describe('Solana Bridge Utilities', () => {
@@ -204,6 +208,17 @@ describe('Solana Bridge Utilities', () => {
       expect(bump).toBeLessThanOrEqual(255);
     });
 
+    it('should derive Token-2022 router signer PDA', () => {
+      const [pda, bump] = deriveRouterSigner2022PDA();
+      const [expected] = PublicKey.findProgramAddressSync(
+        [Buffer.from('router_signer_2022')],
+        TOKEN_BRIDGE_PROGRAM_ID
+      );
+      expect(pda.toBase58()).toBe(expected.toBase58());
+      expect(bump).toBeGreaterThanOrEqual(0);
+      expect(bump).toBeLessThanOrEqual(255);
+    });
+
     it('should derive router config PDA', () => {
       const [pda, bump] = deriveRouterConfigPDA();
       expect(pda).toBeInstanceOf(PublicKey);
@@ -237,6 +252,17 @@ describe('Solana Bridge Utilities', () => {
       expect(pda).toBeInstanceOf(PublicKey);
     });
 
+    it('should derive Token-2022 extension whitelist PDA', () => {
+      const [pda, bump] = deriveExtensionWhitelist2022PDA();
+      const [expected] = PublicKey.findProgramAddressSync(
+        [Buffer.from('extension_whitelist_2022')],
+        TOKEN_BRIDGE_PROGRAM_ID
+      );
+      expect(pda.toBase58()).toBe(expected.toBase58());
+      expect(bump).toBeGreaterThanOrEqual(0);
+      expect(bump).toBeLessThanOrEqual(255);
+    });
+
     it('should derive wrapped mint PDA from contract ID', () => {
       const [pda, bump] = deriveWrappedMintPDA('$ZRA+0000');
       expect(pda).toBeInstanceOf(PublicKey);
@@ -258,6 +284,29 @@ describe('Solana Bridge Utilities', () => {
     it('should have valid token bridge program ID', () => {
       expect(TOKEN_BRIDGE_PROGRAM_ID).toBeInstanceOf(PublicKey);
       expect(TOKEN_BRIDGE_PROGRAM_ID.toBase58()).toBe('WrapZ8f88HR8waSp7wR8Vgc68z4hKj3p3i2b81oeSxR');
+    });
+
+    it('should have valid Token-2022 program ID', () => {
+      expect(TOKEN_2022_PROGRAM_ID).toBeInstanceOf(PublicKey);
+      expect(TOKEN_2022_PROGRAM_ID.toBase58()).toBe('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+    });
+  });
+
+  describe('ATA Derivation', () => {
+    it('should derive Token-2022 ATAs with the Token-2022 program ID', () => {
+      const owner = Keypair.generate().publicKey;
+      const mint = Keypair.generate().publicKey;
+      const ata = getATAWithProgramId(owner, mint, TOKEN_2022_PROGRAM_ID);
+      const expected = PublicKey.findProgramAddressSync(
+        [
+          owner.toBuffer(),
+          TOKEN_2022_PROGRAM_ID.toBuffer(),
+          mint.toBuffer()
+        ],
+        new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+      )[0];
+
+      expect(ata.toBase58()).toBe(expected.toBase58());
     });
   });
 });

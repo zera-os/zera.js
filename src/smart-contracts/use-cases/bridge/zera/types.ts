@@ -16,12 +16,15 @@ import type { CreateSmartContractExecuteOptions } from '../../../execute/index.j
 /**
  * Base options for all ZERA bridge transactions
  */
-export interface BridgeZeraOptions extends Omit<CreateSmartContractExecuteOptions, 'feeId' | 'feeAmountParts'> {
+export interface BridgeZeraOptions extends Omit<CreateSmartContractExecuteOptions, 'feeId'> {
   /** gRPC configuration for network communication */
   grpcConfig?: GRPCConfig;
   /** Optional fee ID (defaults to the token being bridged) */
   feeId?: string;
-  /** Optional fee amount in USD (skips auto-calculation if provided) */
+  /**
+   * @deprecated Use feeAmountParts for raw token parts, or gasFeeInUsd
+   * to add USD-denominated smart-contract gas on top of the calculated fee.
+   */
   feeAmountUsd?: string;
 }
 
