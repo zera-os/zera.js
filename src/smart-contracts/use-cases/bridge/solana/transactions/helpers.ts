@@ -26,6 +26,7 @@ export const ACTION_RELEASE_SPL = 1;
 export const ACTION_MINT_WRAPPED = 2;
 export const ACTION_MINT_WRAPPED_EXISTING = 3;
 export const ACTION_REGISTER_TOKEN = 4;
+export const ACTION_RELEASE_2022 = 5;
 
 // ============================================================================
 // ED25519 VERIFICATION

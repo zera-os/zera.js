@@ -19,15 +19,16 @@
  * Run: npx tsx src/smart-contracts/use-cases/bridge/examples/e2e-token-registration.ts
  */
 
+import { create } from '@bufbuild/protobuf';
 import { Connection, Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 // --- Solana bridge builders ---
 import { createClient } from '../../../../grpc/client-factory.js';
-import { SOLANA_TEST_KEYS, SOLANA_TEST_RPC } from '../../../../test-utils/index.js';
+import { SOLANA_TEST_KEYS } from '../../../../test-utils/index.js';
 import {
   GuardianService,
-  PayloadRequest,
+  PayloadRequestSchema,
   NETWORK_TYPE
 } from '../guardian/index.js';
 import type { SolanaPayload } from '../guardian/index.js';
@@ -48,9 +49,8 @@ const GUARDIAN_CONFIG = {
   port: 443
 };
 
-/** Solana RPC connection */
-/** Solana RPC endpoint — override for mainnet or custom RPC */
-const SOLANA_RPC_URL = 'https://api.devnet.solana.com';
+/** Public Solana devnet RPC endpoint */
+const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com';
 const connection = new Connection(SOLANA_RPC_URL);
 
 /** Solana wallet */
@@ -58,7 +58,7 @@ const solanaWallet = Keypair.fromSecretKey(bs58.decode(SOLANA_TEST_KEYS.primary.
 const PAYER = solanaWallet.publicKey;
 
 /** Token mint to register (Wrapped SOL used here as an example) */
-const MINT = 'BuyN2KRoiEjYKjiJ514dexZgDou8zBjvKnsGjka1jv1c';
+const MINT = '2SboKX1rFhY2uD3ttXHrKt4mQxdt7nEmphkaAakKmfTt';
 
 // ============================================================================
 // HELPER: Sign and send a Solana transaction
@@ -109,7 +109,7 @@ async function fetchRegisterVAA(
     try {
       const client = createClient(GuardianService, GUARDIAN_CONFIG);
       const response = await client.getPayload(
-        new PayloadRequest({ payloadId: txSignature, networkType: NETWORK_TYPE.SOLANA })
+        create(PayloadRequestSchema, { payloadId: txSignature, networkType: NETWORK_TYPE.SOLANA })
       );
 
       if (response.payload.case !== 'solanaPayload') {

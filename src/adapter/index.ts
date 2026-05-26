@@ -43,7 +43,7 @@ export {
 // ============================================================================
 
 // CoinTXN
-export { buildCoinTXN, type CoinTXNBuildInput } from '../coin-txn/transaction.js';
+export { buildCoinTXN, type CoinTXNBuildInput, type CoinTXNBuildOptions } from '../coin-txn/transaction.js';
 
 // GovernanceVote
 export { buildVoteTXN, sendVoteTXN, type BuildVoteTXNOptions } from '../vote/transaction.js';
@@ -55,8 +55,47 @@ export { buildContractUpdateTXN, type BuildContractUpdateOptions } from '../cont
 // Smart Contract Execute
 export { buildSmartContractExecuteTXN, type BuildSmartContractExecuteOptions } from '../smart-contracts/execute/transaction.js';
 
+// Smart Contract Deploy & Instantiate
+export {
+  buildSmartContractTXN,
+  buildSmartContractDeployTXN,
+  createSmartContractTXN,
+  createSmartContractDeployTXN,
+  sendSmartContractTXN,
+  sendSmartContractDeployTXN,
+  type SmartContractCodeInput,
+  type BuildSmartContractTXNOptions,
+  type CreateSmartContractTXNOptions,
+  type BuildSmartContractDeployTXNOptions,
+  type CreateSmartContractDeployTXNOptions
+} from '../smart-contracts/deploy/transaction.js';
+
+export {
+  buildSmartContractInstantiateTXN,
+  createSmartContractInstantiateTXN,
+  sendSmartContractInstantiateTXN,
+  type InstantiateParameter,
+  type BuildSmartContractInstantiateTXNOptions,
+  type CreateSmartContractInstantiateTXNOptions
+} from '../smart-contracts/instantiate/transaction.js';
+
+// NFT/SBT Item Transactions
+export {
+  buildItemizedMintTXN,
+  buildItemMintTXN,
+  buildNFTTXN,
+  buildNFTTransferTXN,
+  buildBurnSBTTXN,
+  type BuildItemizedMintOptions,
+  type BuildNFTTXNOptions,
+  type BuildBurnSBTTXNOptions,
+  type ItemizedMintParameterInput,
+  type ItemContractFeesInput
+} from '../items/transaction.js';
+
 // Re-export types needed for building transactions
 export type { ExecuteParameter, ParameterType } from '../smart-contracts/execute/transaction.js';
+export type { SmartContractParameter } from '../smart-contracts/shared/parameters.js';
 export type { CreateContractOptions, UpdateContractOptions } from '../contract/shared/types.js';
 
 // ============================================================================
@@ -119,4 +158,3 @@ export type {
   ZeraWCSignMessageResult,
   ZeraWCGetAccountsResult
 } from './walletconnect.js';
-

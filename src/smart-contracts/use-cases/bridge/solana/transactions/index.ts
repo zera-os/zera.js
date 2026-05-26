@@ -6,14 +6,29 @@
  */
 
 // ============================================================================
+// TOKEN-TYPE ROUTED TRANSACTIONS
+// ============================================================================
+
+export {
+  buildLockSolanaTransaction,
+  buildReleaseSolanaTransaction,
+  type LockSolanaTransactionResult,
+  type ReleaseSolanaTransactionResult
+} from './token-type.js';
+
+// ============================================================================
 // RELEASE TRANSACTIONS (ZERA → Solana)
 // ============================================================================
 
 export {
   buildReleaseSplTransaction,
   buildReleaseSolTransaction,
+  buildReleaseToken2022Transaction,
+  buildRelease2022Transaction,
   type ReleaseSplResult,
-  type ReleaseSolResult
+  type ReleaseSolResult,
+  type ReleaseToken2022Result,
+  type Release2022Result
 } from './release.js';
 
 // ============================================================================
@@ -23,8 +38,12 @@ export {
 export {
   buildLockSplTransaction,
   buildLockSolTransaction,
+  buildLockToken2022Transaction,
+  buildLock2022Transaction,
   type LockSplResult,
-  type LockSolResult
+  type LockSolResult,
+  type LockToken2022Result,
+  type Lock2022Result
 } from './lock.js';
 
 // ============================================================================
@@ -64,8 +83,14 @@ export {
 
 export type {
   GuardianSignature,
+  ReleaseToken2022Options,
+  Release2022Options,
   ReleaseSplOptions,
   ReleaseSolOptions,
+  LockSolanaOptions,
+  ReleaseSolanaOptions,
+  LockToken2022Options,
+  Lock2022Options,
   LockSplOptions,
   LockSolOptions,
   MintWrappedOptions,

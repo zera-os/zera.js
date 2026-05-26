@@ -7,7 +7,12 @@
 import type { ZeraPayload } from '../../../../../proto/generated/guardian_pb.js';
 import { SmartContractExecuteTXN } from '../../../../../proto/generated/txn_pb.js';
 import { MAINNET_GRPC_CONFIG } from '../../../../shared/utils/testing-defaults/index.js';
-import { createSmartContractExecuteTXN, ParamType, type ExecuteParameter } from '../../../execute/index.js';
+import {
+  createSmartContractExecuteTXN,
+  ParamType,
+  type CreateSmartContractExecuteOptions,
+  type ExecuteParameter
+} from '../../../execute/index.js';
 
 import type { BridgeZeraOptions } from './types.js';
 
@@ -40,6 +45,19 @@ export function formatGuardianSignatures(payload: ZeraPayload): string {
   return `${payload.signedHash}|${sigPairs}`;
 }
 
+function resolveFeeAmountParts(options: BridgeZeraOptions): string | undefined {
+  const { feeAmountUsd } = options;
+  const feeAmountParts = options.feeAmountParts ?? feeAmountUsd;
+
+  if (feeAmountParts !== undefined && !/^\d+$/.test(feeAmountParts)) {
+    throw new Error(
+      'feeAmountParts must be an integer string in raw token parts. Use gasFeeInUsd to add USD-denominated smart-contract gas.'
+    );
+  }
+
+  return feeAmountParts;
+}
+
 /**
  * Create a bridge transaction with the given function and parameters
  * 
@@ -62,11 +80,21 @@ export async function createBridgeTransaction(
   options: BridgeZeraOptions
 ): Promise<SmartContractExecuteTXN> {
   const grpcConfig = options.grpcConfig || MAINNET_GRPC_CONFIG;
+  const feeAmountParts = resolveFeeAmountParts(options);
+  const executeOptionsBase = { ...options };
+  delete executeOptionsBase.feeAmountUsd;
   
   const parameters: ExecuteParameter[] = [
     { type: ParamType.STRING, value: functionName },
     { type: ParamType.STRING, value: parameterValue }
   ];
+
+  const executeOptions: CreateSmartContractExecuteOptions = {
+    ...executeOptionsBase,
+    feeId,
+    ...(feeAmountParts !== undefined && { feeAmountParts }),
+    grpcConfig
+  };
 
   return createSmartContractExecuteTXN(
     BRIDGE_CONTRACT_NAME,
@@ -75,11 +103,6 @@ export async function createBridgeTransaction(
     parameters,
     publicKeyBase58Identifier,
     privateKeyBase58,
-    {
-      ...options,
-      feeId,
-      ...(options.feeAmountUsd !== undefined && { feeAmountParts: options.feeAmountUsd }),
-      grpcConfig
-    }
+    executeOptions
   );
 }

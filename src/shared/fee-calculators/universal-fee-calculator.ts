@@ -37,7 +37,7 @@ import type { PublicKey } from '../../../proto/generated/txn_pb.js';
 import { getSchemaForTypeName } from '../../adapter/serialization.js';
 import { getTokenFeeInfo } from '../../api/handler/token-info/service.js';
 import { getBalance } from '../../api/validator/balance/service.js';
-import { getBaseFee } from '../../api/validator/base-fee/service.js';
+import { getBaseFee, type EnhancedBaseFeeResponse } from '../../api/validator/base-fee/service.js';
 import type { 
   AmountInput,
   GRPCConfig
@@ -127,10 +127,14 @@ export interface FeeConfig {
   baseFeeId?: string;
   /** Base fee amount in user-friendly units (auto-calculated if not provided) */
   baseFee?: AmountInput;
+  /** Base fee amount in smallest units/parts (used exactly, skips conversion and recalculation) */
+  baseFeeParts?: string;
   /** Contract fee instrument (defaults to contractId) */
   contractFeeId?: string;
   /** Contract fee amount in user-friendly units (auto-calculated if not provided) */
   contractFee?: AmountInput;
+  /** Contract fee amount in smallest units/parts (used exactly, skips conversion and recalculation) */
+  contractFeeParts?: string;
   /** Interface fee contract ID (triggers interface fee calculation) */
   interfaceFeeId?: string;
   /** Interface fee amount (required if interfaceFeeId is specified) */
@@ -192,6 +196,18 @@ export interface FeeConfigHelper<T extends TransactionMessage = TransactionMessa
   contractId?: string;
   protoObject: T;
   tokenInfoMap: Map<string, TokenInfo>;
+  onBaseFeeCalculated?: (details: BaseFeeCalculationDetails) => void;
+}
+
+export interface BaseFeeCalculationDetails {
+  transactionType: number;
+  baseFeeId: string;
+  publicKey?: PublicKey;
+  baseFeeResponse: EnhancedBaseFeeResponse;
+  feeMultiplier: number;
+  transactionSize: number;
+  feeAmountParts: string;
+  newWalletFeeScaled: string;
 }
 
 
@@ -381,6 +397,7 @@ function calculateContractFee(
   protoObject: TransactionMessage,
   contractFeeId: string | undefined,
   contractFee: AmountInput | undefined,
+  contractFeeParts: string | undefined,
   tokenInfoMap?: Map<string, TokenInfo>,
   overestimatePercent: number = 5.0
 ): void {
@@ -390,6 +407,20 @@ function calculateContractFee(
 
     if (contractId === 'invalid') {
       throw new Error('contractId not found');
+    }
+
+    // Handle manual contract fee in smallest units/parts - skip all calculation and conversion
+    if (contractFeeParts !== undefined && contractFeeId) {
+      logger.warn('Manual contract fee parts specified - skipping fee calculation and conversion. Fee is not validated and may be insufficient, causing transaction failure.', {
+        contractFeeId,
+        providedFeeParts: contractFeeParts,
+        operation: 'manualContractFeeParts'
+      });
+
+      const coinTxnProto = protoObject as CoinTXN;
+      coinTxnProto.contractFeeId = contractFeeId;
+      coinTxnProto.contractFeeAmount = contractFeeParts;
+      return;
     }
 
     // Handle manual contract fee - skip all calculation, validation, and overestimation
@@ -686,11 +717,39 @@ async function calculateNetworkFee(
   transactionType: number,
   baseFeeId: string = '$ZRA+0000',
   baseFee: AmountInput | undefined,
+  baseFeeParts: string | undefined,
   tokenInfoMap?: Map<string, TokenInfo>,
   overestimatePercent: number = 5.0,
   gasFeeInUsd?: number,
-  grpcConfig?: GRPCConfig
+  grpcConfig?: GRPCConfig,
+  onBaseFeeCalculated?: (details: BaseFeeCalculationDetails) => void
 ): Promise<string> {
+  // Handle manual base fee in smallest units/parts - skip all calculation and conversion
+  if (baseFeeParts !== undefined) {
+    logger.warn('Manual base fee parts specified - skipping fee calculation and conversion. Fee is not validated and may be insufficient, causing transaction failure.', {
+      baseFeeId,
+      providedFeeParts: baseFeeParts,
+      operation: 'manualBaseFeeParts'
+    });
+
+    let finalFee = baseFeeParts;
+
+    // Add gas fee if provided (only applicable for SmartContractExecuteTXN)
+    if (gasFeeInUsd !== undefined && gasFeeInUsd > 0) {
+      const gasFeeInSmallestUnits = calculateGasFee(gasFeeInUsd, baseFeeId, tokenInfoMap);
+      const baseFeeDecimal = toDecimal(finalFee);
+      const gasFeeDecimal = toDecimal(gasFeeInSmallestUnits);
+      finalFee = baseFeeDecimal.add(gasFeeDecimal).floor().toString();
+    }
+
+    const txnProto = protoObject as { base?: { feeAmount?: string; feeId?: string } };
+    if (txnProto.base) {
+      txnProto.base.feeAmount = finalFee;
+      txnProto.base.feeId = baseFeeId;
+    }
+    return '0';
+  }
+
   // Handle manual base fee - skip all calculation, validation, and overestimation
   if (baseFee !== undefined) {
     const baseFeeInSmallestUnits = toSmallestUnits(baseFee, baseFeeId, tokenInfoMap ? { tokenInfoMap } : {});
@@ -839,6 +898,17 @@ async function calculateNetworkFee(
     txnProto.base.feeAmount = transactionAmount;
     txnProto.base.feeId = baseFeeId;
   }
+
+  onBaseFeeCalculated?.({
+    transactionType,
+    baseFeeId,
+    ...(publicKey ? { publicKey } : {}),
+    baseFeeResponse,
+    feeMultiplier,
+    transactionSize,
+    feeAmountParts: transactionAmount,
+    newWalletFeeScaled
+  });
 
   return newWalletFeeScaled;
 }
@@ -1037,6 +1107,7 @@ export class UniversalFeeCalculator {
           options.protoObject,
           options.contractFeeId,
           options.contractFee,
+          options.contractFeeParts,
           options.tokenInfoMap,
           options.overestimatePercent
         );
@@ -1068,16 +1139,18 @@ export class UniversalFeeCalculator {
       transactionType,
       effectiveBaseFeeId,
       options.baseFee,
+      options.baseFeeParts,
       workingTokenInfoMap,
       options.overestimatePercent,
       options.gasFeeInUsd,
-      options.grpcConfig
+      options.grpcConfig,
+      options.onBaseFeeCalculated
     );
 
     // STEP 4: Add new token balance fee for CoinTXN (only for auto-calculated base fees)
     // Checks if any destination address doesn't hold the transferred token,
     // and adds the network-sourced new_wallet_fee per such address to the base network fee.
-    if (transactionType === TRANSACTION_TYPE.COIN_TYPE && options.baseFee === undefined) {
+    if (transactionType === TRANSACTION_TYPE.COIN_TYPE && options.baseFee === undefined && options.baseFeeParts === undefined) {
       const coinContractId = isCoinTXN(options.protoObject) ? options.protoObject.contractId : undefined;
       if (coinContractId) {
         try {

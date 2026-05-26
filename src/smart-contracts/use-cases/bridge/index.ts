@@ -19,8 +19,12 @@
  * 
  * ### Solana (./solana)
  * Solana-side bridge operations via on-chain programs.
+ * - `SolanaTokenType` - Explicit SOL / SPL / TOKEN2022 selector
+ * - `buildLockSolanaTransaction` / `buildReleaseSolanaTransaction`
  * - `buildReleaseSplTransaction` (handles both SPL and SOL)
+ * - `buildReleaseToken2022Transaction`
  * - `buildLockSplTransaction` / `buildLockSolTransaction`
+ * - `buildLockToken2022Transaction`
  * - `buildMintWrappedTransaction` / `buildMintWrappedExistingTransaction`
  * - `buildBurnWrappedTransaction`
  * - `buildRegisterTokenTransaction`

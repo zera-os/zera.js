@@ -15,12 +15,13 @@
  * ```
  */
 
+import { create } from '@bufbuild/protobuf';
 import bs58 from 'bs58';
 
 import { createClient } from '../../../../../grpc/client-factory.js';
 import { MAINNET_GRPC_CONFIG } from '../../../../../shared/utils/testing-defaults/index.js';
 import { SOLANA_TEST_KEYS, SOLANA_TEST_RPC, TEST_WALLET_ADDRESSES } from '../../../../../test-utils/index.js';
-import { fetchSolanaVAA, GuardianService, PayloadRequest, NETWORK_TYPE } from '../../guardian/index.js';
+import { fetchSolanaVAA, GuardianService, PayloadRequestSchema, NETWORK_TYPE } from '../../guardian/index.js';
 import type { SolanaPayload } from '../../guardian/index.js';
 import type { GuardianSignature } from '../../solana/index.js';
 import {
@@ -386,7 +387,7 @@ async function registerTokenExample(txnHash: string) {
   console.log(`Fetching VAA for: ${txnHash.slice(0, 20)}...`);
   const guardianClient = createClient(GuardianService, GUARDIAN_CONFIG);
   const response = await guardianClient.getPayload(
-    new PayloadRequest({ payloadId: txnHash, networkType: NETWORK_TYPE.SOLANA })
+    create(PayloadRequestSchema, { payloadId: txnHash, networkType: NETWORK_TYPE.SOLANA })
   );
   if (response.payload.case !== 'solanaPayload') {
     throw new Error(`Expected solanaPayload, got: ${response.payload.case}`);

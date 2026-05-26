@@ -66,8 +66,8 @@ const ZERA_PRIVATE_KEY = ED25519_TEST_KEYS.alice.privateKey;
 /** ZERA network config */
 const ZERA_CONFIG = MAINNET_GRPC_CONFIG;
 
-/** Fee config for ZERA transactions */
-const FEE_AMOUNT_USD = '5.00';
+/** Adds $5 smart-contract gas; the SDK calculates the base fee in token parts. */
+const GAS_FEE_IN_USD = 5;
 const FEE_CONTRACT_ID = '$ZRA+0000';
 
 /** ZERA contract ID for ZRA */
@@ -138,7 +138,7 @@ async function step1_lockZera(): Promise<string> {
     {
       grpcConfig: ZERA_CONFIG,
       feeId: FEE_CONTRACT_ID,
-      feeAmountUsd: FEE_AMOUNT_USD
+      gasFeeInUsd: GAS_FEE_IN_USD
     }
   );
 
@@ -243,7 +243,7 @@ async function step4_submitToZera(solanaSig: string): Promise<string> {
     zeraConfig: ZERA_CONFIG,
     publicKeyBase58: ZERA_PUBLIC_KEY,
     privateKeyBase58: ZERA_PRIVATE_KEY,
-    feeAmountUsd: FEE_AMOUNT_USD,
+    gasFeeInUsd: GAS_FEE_IN_USD,
     feeId: FEE_CONTRACT_ID,
     retryOptions: { retry: true }
   });

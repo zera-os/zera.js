@@ -41,7 +41,7 @@ import type {
 import { getNonces } from '../api/handler/nonce/service.js';
 import { getPublicKeyBytes, generateAddressFromPublicKey, sanitizeAndDecodeAddress } from '../shared/crypto/address-utils.js';
 import { createTransactionHash } from '../shared/crypto/signature-utils.js';
-import { UniversalFeeCalculator, type FeeConfig, type FeeConfigHelper } from '../shared/fee-calculators/universal-fee-calculator.js';
+import { UniversalFeeCalculator, type BaseFeeCalculationDetails, type FeeConfig, type FeeConfigHelper } from '../shared/fee-calculators/universal-fee-calculator.js';
 import { logger } from '../shared/monitoring/index.js';
 import { validateExactAmountBalance, Decimal } from '../shared/utils/amount-utils.js';
 import { sanitizeProtobufObject } from '../shared/utils/protobuf-utils.js';
@@ -76,6 +76,14 @@ export interface CoinTXNBuildInput {
   allowanceAddress?: string;
   /** Manual nonce override (skips network fetch when provided) */
   nonce?: string | number | bigint;
+}
+
+export interface CoinTXNBuildOptions {
+  /**
+   * Called with the network base fee schedule used during build.
+   * Existing callers can ignore this; the returned CoinTXN is unchanged.
+   */
+  onBaseFeeCalculated?: (details: BaseFeeCalculationDetails) => void;
 }
 
 // ============================================================================
@@ -322,6 +330,7 @@ function createTransferAuth(
  * @param feeConfig  - Fee configuration
  * @param baseMemo   - Optional memo
  * @param grpcConfig - Optional gRPC configuration
+ * @param buildOptions - Optional metadata hooks for callers that need fee details
  * @returns An unsigned `CoinTXN` protobuf (no signatures, no hash)
  *
  * @example
@@ -339,7 +348,8 @@ export async function buildCoinTXN(
   contractId: string,
   feeConfig: FeeConfig = { baseFeeId: '$ZRA+0000' },
   baseMemo: string = '',
-  grpcConfig: GRPCConfig = MAINNET_GRPC_CONFIG
+  grpcConfig: GRPCConfig = MAINNET_GRPC_CONFIG,
+  buildOptions: CoinTXNBuildOptions = {}
 ): Promise<CoinTXN> {
   // Normalize all contract IDs to canonical casing for consistent lookups
   const normalizedContractId = normalizeContractId(contractId);
@@ -392,7 +402,8 @@ export async function buildCoinTXN(
     ...(grpcConfig && !normalizedFeeConfig.grpcConfig ? { grpcConfig } : {}),
     contractId: coinTxn.contractId,
     protoObject: coinTxn,
-    tokenInfoMap
+    tokenInfoMap,
+    ...(buildOptions.onBaseFeeCalculated ? { onBaseFeeCalculated: buildOptions.onBaseFeeCalculated } : {})
   };
   coinTxn = await UniversalFeeCalculator.calculateFee(feeConfigHelper);
 

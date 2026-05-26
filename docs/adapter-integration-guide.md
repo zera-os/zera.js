@@ -236,7 +236,13 @@ The adapter works with **all** SDK transaction builders:
 | `buildVoteTXN()`                 | Governance voting    |
 | `buildContractTXN()`             | Contract deployment  |
 | `buildContractUpdateTXN()`       | Contract updates     |
+| `buildSmartContractTXN()`        | Smart contract deployment |
+| `buildSmartContractDeployTXN()`  | Smart contract deployment alias |
 | `buildSmartContractExecuteTXN()` | Smart contract calls |
+| `buildSmartContractInstantiateTXN()` | Smart contract instantiation |
+| `buildItemizedMintTXN()`         | NFT/SBT item minting |
+| `buildNFTTXN()`                  | NFT item transactions |
+| `buildBurnSBTTXN()`              | SBT item burns       |
 
 The pattern is always the same:
 

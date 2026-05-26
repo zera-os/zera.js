@@ -6,10 +6,13 @@
 
 import {
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 import {
   Connection,
+  ComputeBudgetProgram,
   PublicKey,
   Transaction,
   TransactionInstruction,
@@ -20,15 +23,20 @@ import {
   concatBytes,
   encodeU64LE
 } from '../../../../../shared/utils/byte-utils.js';
-import type { LockSplOptions, LockSolOptions } from '../types.js';
+import type { LockToken2022Options, LockSplOptions, LockSolOptions } from '../types.js';
 import {
   CORE_PROGRAM_ID,
   TOKEN_BRIDGE_PROGRAM_ID,
   generateDiscriminator,
   deriveRouterSignerPDA,
+  deriveRouterSigner2022PDA,
+  deriveRouterConfigPDA,
   deriveRateLimitStatePDA,
   deriveTokenRegistrationPDA,
   getATA,
+  getATAWithProgramId,
+  deriveExtensionWhitelist2022PDA,
+  assertToken2022Mint,
   encodeBorshString
 } from '../utils.js';
 
@@ -129,6 +137,149 @@ export async function buildLockSplTransaction(
     accounts: { userAta, vaultAta, routerSigner, routerConfig, rateLimitState, tokenRegistration }
   };
 }
+
+// ============================================================================
+// LOCK TOKEN-2022 TOKENS (Bridge to ZERA)
+// ============================================================================
+
+export interface LockToken2022Result {
+  createUserAtaInstruction: TransactionInstruction;
+  createVaultAtaInstruction: TransactionInstruction;
+  instruction: TransactionInstruction;
+  transaction: Transaction;
+  accounts: {
+    userAta: PublicKey;
+    vaultAta: PublicKey;
+    routerSigner2022: PublicKey;
+    routerConfig: PublicKey;
+    rateLimitState: PublicKey;
+    tokenRegistration: PublicKey;
+    extensionWhitelist: PublicKey;
+  };
+}
+
+/**
+ * Build a Lock Token-2022 transaction
+ *
+ * Locks Token-2022 tokens in the Token-2022 vault to bridge to ZERA chain.
+ * SPL and native SOL use their existing builders; this path uses the
+ * Token-2022 program for ATA derivation and token CPI.
+ *
+ * Rust reference: stx_proxy_execute_lock_2022
+ */
+export async function buildLockToken2022Transaction(
+  options: LockToken2022Options,
+  payer: PublicKey,
+  connection?: Connection
+): Promise<LockToken2022Result> {
+  const { amount, zeraAddress, mint } = options;
+
+  const mintPubkey = new PublicKey(mint);
+  await assertToken2022Mint(connection, mintPubkey);
+
+  const [routerSigner2022] = deriveRouterSigner2022PDA();
+  const [routerConfig] = deriveRouterConfigPDA();
+  const [rateLimitState] = deriveRateLimitStatePDA();
+  const [tokenRegistration] = deriveTokenRegistrationPDA(mintPubkey);
+  const [extensionWhitelist] = deriveExtensionWhitelist2022PDA();
+
+  const userAta = getATAWithProgramId(payer, mintPubkey, TOKEN_2022_PROGRAM_ID);
+  const vaultAta = getATAWithProgramId(routerSigner2022, mintPubkey, TOKEN_2022_PROGRAM_ID);
+
+  const createUserAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    payer,
+    userAta,
+    payer,
+    mintPubkey,
+    TOKEN_2022_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  const createVaultAtaInstruction = createAssociatedTokenAccountIdempotentInstruction(
+    payer,
+    vaultAta,
+    routerSigner2022,
+    mintPubkey,
+    TOKEN_2022_PROGRAM_ID,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+
+  const amountBigInt = BigInt(amount);
+
+  const data = concatBytes(
+    generateDiscriminator('global:lock_2022'),
+    encodeU64LE(amountBigInt),
+    encodeBorshString(zeraAddress)
+  );
+
+  // Account order must match Rust reference exactly:
+  // 1.  core_program (readonly)
+  // 2.  router_cfg (readonly)
+  // 3.  payer (signer, writable)
+  // 4.  from_ata (writable)
+  // 5.  mint (readonly)
+  // 6.  router_signer_2022 (readonly)
+  // 7.  vault_ata (writable)
+  // 8.  rate_limit_state (writable)
+  // 9.  token_registration (writable)
+  // 10. extension_whitelist (readonly)
+  // 11. token_program (Token-2022, readonly)
+  // 12. associated_token_program (readonly)
+  // 13. system_program (readonly)
+  const instruction = new TransactionInstruction({
+    programId: TOKEN_BRIDGE_PROGRAM_ID,
+    keys: [
+      { pubkey: CORE_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: routerConfig, isSigner: false, isWritable: false },
+      { pubkey: payer, isSigner: true, isWritable: true },
+      { pubkey: userAta, isSigner: false, isWritable: true },
+      { pubkey: mintPubkey, isSigner: false, isWritable: false },
+      { pubkey: routerSigner2022, isSigner: false, isWritable: false },
+      { pubkey: vaultAta, isSigner: false, isWritable: true },
+      { pubkey: rateLimitState, isSigner: false, isWritable: true },
+      { pubkey: tokenRegistration, isSigner: false, isWritable: true },
+      { pubkey: extensionWhitelist, isSigner: false, isWritable: false },
+      { pubkey: TOKEN_2022_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: ASSOCIATED_TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      { pubkey: SystemProgram.programId, isSigner: false, isWritable: false }
+    ],
+    data: Buffer.from(data)
+  });
+
+  const transaction = new Transaction().add(
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
+    createUserAtaInstruction,
+    createVaultAtaInstruction,
+    instruction
+  );
+  transaction.feePayer = payer;
+
+  if (connection) {
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+  }
+
+  return {
+    createUserAtaInstruction,
+    createVaultAtaInstruction,
+    instruction,
+    transaction,
+    accounts: {
+      userAta,
+      vaultAta,
+      routerSigner2022,
+      routerConfig,
+      rateLimitState,
+      tokenRegistration,
+      extensionWhitelist
+    }
+  };
+}
+
+/** @deprecated Use LockToken2022Result. */
+export type Lock2022Result = LockToken2022Result;
+
+/** @deprecated Use buildLockToken2022Transaction. */
+export const buildLock2022Transaction = buildLockToken2022Transaction;
 
 // ============================================================================
 // LOCK SOL (Native, Bridge to ZERA)
@@ -234,4 +385,3 @@ export async function buildLockSolTransaction(
     accounts: { payerWsolAta, vaultAta, routerSigner, routerConfig, rateLimitState, tokenPriceRegistry }
   };
 }
-

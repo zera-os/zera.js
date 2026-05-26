@@ -32,12 +32,16 @@
  * ## Available Functions
  * 
  * ### User Operations (Bridging)
+ * - `buildLockSolanaTransaction` - Lock SOL, SPL, or Token-2022 by token type
  * - `buildLockSplTransaction` - Lock SPL tokens to bridge to ZERA
  * - `buildLockSolTransaction` - Lock native SOL to bridge to ZERA  
+ * - `buildLockToken2022Transaction` - Lock Token-2022 tokens to bridge to ZERA
  * - `buildBurnWrappedTransaction` - Burn wrapped ZERA tokens to bridge back
  * 
  * ### Guardian Operations (Releasing)
+ * - `buildReleaseSolanaTransaction` - Release SOL, SPL, or Token-2022 by token type
  * - `buildReleaseSplTransaction` - Release SPL tokens, including SOL (after ZERA → Solana transfer)
+ * - `buildReleaseToken2022Transaction` - Release Token-2022 tokens
  * 
  * ### Utilities
  * - PDA derivation functions for all bridge accounts
@@ -52,8 +56,14 @@
 export type {
   SolanaBridgeOptions,
   GuardianSignature,
+  ReleaseToken2022Options,
+  Release2022Options,
   ReleaseSplOptions,
   ReleaseSolOptions,
+  LockSolanaOptions,
+  ReleaseSolanaOptions,
+  LockToken2022Options,
+  Lock2022Options,
   LockSplOptions,
   LockSolOptions,
   MintWrappedOptions,
@@ -75,10 +85,17 @@ export type {
 // ============================================================================
 
 export {
+  SolanaTokenType,
+  BridgeAction,
+  type BridgeActionType
+} from './constants.js';
+
+export {
   CORE_PROGRAM_ID,
   TOKEN_BRIDGE_PROGRAM_ID,
   METADATA_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
   ATA_PROGRAM_ID,
   SystemProgram,
   SYSVAR_INSTRUCTIONS_PUBKEY,
@@ -91,17 +108,22 @@ export {
 
 export {
   deriveRouterSignerPDA,
+  deriveRouterSigner2022PDA,
   deriveRouterConfigPDA,
   deriveVerifiedTransferPDA,
   deriveReleasedTransferPDA,
   deriveVaultPDA,
   deriveRateLimitStatePDA,
   deriveTokenRegistrationPDA,
+  deriveExtensionWhitelist2022PDA,
   deriveWrappedMintPDA,
   deriveWrappedMintAuthorityPDA,
   deriveLockedTransferPDA,
   deriveMetadataPDA,
-  getATA
+  getATA,
+  getATAWithProgramId,
+  getMintAccountOwner,
+  assertToken2022Mint
 } from './utils.js';
 
 // ============================================================================
@@ -109,13 +131,21 @@ export {
 // ============================================================================
 
 export {
+  // Token-type routed operations
+  buildLockSolanaTransaction,
+  buildReleaseSolanaTransaction,
+
   // Release operations (Guardian-executed, ZERA → Solana)
   buildReleaseSplTransaction,
   buildReleaseSolTransaction,
+  buildReleaseToken2022Transaction,
+  buildRelease2022Transaction,
   
   // Lock operations (User-initiated, Solana → ZERA)
   buildLockSplTransaction,
   buildLockSolTransaction,
+  buildLockToken2022Transaction,
+  buildLock2022Transaction,
   
   // Wrapped token operations
   buildBurnWrappedTransaction,
@@ -127,10 +157,16 @@ export {
   buildRegisterTokenTransaction,
   
   // Result types
+  type LockSolanaTransactionResult,
+  type ReleaseSolanaTransactionResult,
   type ReleaseSplResult,
   type ReleaseSolResult,
+  type ReleaseToken2022Result,
+  type Release2022Result,
   type LockSplResult,
   type LockSolResult,
+  type LockToken2022Result,
+  type Lock2022Result,
   type BurnWrappedResult,
   type MintWrappedResult,
   type MintWrappedExistingResult,
