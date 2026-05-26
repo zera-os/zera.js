@@ -8,7 +8,7 @@
  */
 
 import { execSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -149,6 +149,40 @@ function getLatestPublishedVersion(): string {
   }
 }
 
+function updateSdkExportVersion(version: string): void {
+  const indexPath = join(projectRoot, 'index.ts');
+  const current = readFileSync(indexPath, 'utf8');
+  const versionCommentPattern = /@version\s+\d+\.\d+\.\d+(?:-[\w.-]+)?/;
+  const versionExportPattern = /export const VERSION = ['"]\d+\.\d+\.\d+(?:-[\w.-]+)?['"] as const;/;
+
+  if (!versionCommentPattern.test(current) || !versionExportPattern.test(current)) {
+    throw new Error('Could not find SDK version markers in index.ts');
+  }
+
+  const next = current
+    .replace(versionCommentPattern, `@version ${version}`)
+    .replace(versionExportPattern, `export const VERSION = '${version}' as const;`);
+
+  writeFileSync(indexPath, next);
+  logSuccess(`SDK export version updated: ${version}`);
+}
+
+function updatePackageLockVersion(version: string): void {
+  const lockPath = join(projectRoot, 'package-lock.json');
+  if (!existsSync(lockPath)) {
+    return;
+  }
+
+  const packageLock = JSON.parse(readFileSync(lockPath, 'utf8'));
+  packageLock.version = version;
+  if (packageLock.packages?.['']) {
+    packageLock.packages[''].version = version;
+  }
+
+  writeFileSync(lockPath, `${JSON.stringify(packageLock, null, 2)}\n`);
+  logSuccess(`package-lock version updated: ${version}`);
+}
+
 async function updateVersion(versionType?: 'patch' | 'minor' | 'major') {
   const branch = execSync('git branch --show-current', { 
     cwd: projectRoot, 
@@ -264,14 +298,16 @@ async function updateVersion(versionType?: 'patch' | 'minor' | 'major') {
       }
     }
     
+    updateSdkExportVersion(newVersion);
+
     // Update package.json directly
     const packageJsonPath = join(projectRoot, 'package.json');
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
     packageJson.version = newVersion;
     
     // Write back to package.json
-    const fs = await import('fs');
-    fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+    writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+    updatePackageLockVersion(newVersion);
     
     logSuccess(`Version updated: ${currentPackageVersion} → ${newVersion}`);
     return newVersion;
@@ -446,6 +482,9 @@ async function deploy(versionType?: 'patch' | 'minor' | 'major') {
   log('', colors.reset);
   
   const initialVersion = getCurrentVersion();
+  const initialIndexContent = readFileSync(join(projectRoot, 'index.ts'), 'utf8');
+  const packageLockPath = join(projectRoot, 'package-lock.json');
+  const initialPackageLockContent = existsSync(packageLockPath) ? readFileSync(packageLockPath, 'utf8') : null;
   logInfo(`Current version: ${initialVersion}`);
   
   // Update version if specified or if on non-main branch (to add pre-release suffix)
@@ -516,8 +555,11 @@ async function deploy(versionType?: 'patch' | 'minor' | 'major') {
         const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
         packageJson.version = initialVersion;
         
-        const fs = await import('fs');
-        fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+        writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+        writeFileSync(join(projectRoot, 'index.ts'), initialIndexContent);
+        if (initialPackageLockContent !== null) {
+          writeFileSync(packageLockPath, initialPackageLockContent);
+        }
         logSuccess(`Version reverted to: ${initialVersion}`);
       } catch {
         logError('Failed to revert version - manual intervention required');

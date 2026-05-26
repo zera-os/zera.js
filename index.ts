@@ -7,7 +7,7 @@
  * - CoinTXN creation and submission
  * - API services for nonce and exchange rate management
  * 
- * @version 1.0.0
+ * @version 1.1.0
  * @author ZERA Community
  * @license Apache-2.0
  */
@@ -296,7 +296,7 @@ export {
 /**
  * SDK version
  */
-export const VERSION = '1.0.0' as const;
+export const VERSION = '1.1.0' as const;
 
 /**
  * SDK description
